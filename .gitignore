@@ -1,0 +1,17 @@
+# Environment files
+.env
+
+# Python cache files
+*.txt
+*.log
+*.pkl
+*.csv
+
+# Python bytecode files
+__pycache__/
+
+# Jupyter Notebook checkpoints
+.ipynb_checkpoints/
+
+.idea/
+dataset/
