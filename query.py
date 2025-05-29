@@ -143,23 +143,22 @@ class StockPerformanceAnalyzer:
         Calculate stock performance for specified period after start_date
         Returns various performance metrics
         """
-
         df = self.load_stock_data(ticker)
         if df.empty:
             return {"error": "No price data available"}
 
         try:
-            # Find the closest trading day to start_date
-            print(f"dates: {df.index} to {start_date}")
-            print(f"Type of start_date: {type(start_date)}")
-            print(f"Type of df.index: {type(df.index)}")
+            # Normalize start_date to just the date part for comparison
+            # This handles timezone-aware timestamps and time components
+            start_date_normalized = pd.Timestamp(start_date.date())
 
-            exit()
+            # Find the first available date on or after start_date
+            available_dates = df.index[df.index >= start_date_normalized]
 
+            if available_dates.empty:
+                return {"error": f"No data available on or after {start_date.date()}"}
 
-            closest_date = df.index[df.index >= start_date].min()
-            if pd.isna(closest_date):
-                return {"error": "No data after tweet date"}
+            closest_date = available_dates.min()
 
             # Find end date (approximately days_forward trading days later)
             end_date = closest_date + timedelta(days=days_forward)  # Add buffer for weekends
@@ -220,9 +219,10 @@ class TweetStockAnalyzer:
                 for line in f:
                     parts = line.strip().split('\t')
                     if len(parts) >= 3:
-                        ticker = parts[1].strip()
+                        ticker = parts[1].strip().replace('$', '')
                         company = parts[2].strip()
                         mapping[ticker] = company
+            logger.info(f"Loaded stock mapping for {len(mapping)} tickers")
         except Exception as e:
             logger.warning(f"Could not load stock mapping: {e}")
         return mapping
@@ -342,7 +342,7 @@ def main():
 
     # Sample analysis (full dataset might be expensive with GPT-4.1)
     # You can adjust sample_size or implement batching
-    sample_size = 5  # Start with small sample
+    sample_size = 10  # Start with small sample
     sample_df = df_with_text.sample(n=min(sample_size, len(df_with_text)), random_state=42)
 
     results = []
