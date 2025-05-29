@@ -1,0 +1,182 @@
+[
+  {
+    "tweet_id":"561242217399189505",
+    "tweet_date":"2015-01-30 19:19:06",
+    "ticker":"AAPL",
+    "company":"Apple Inc.",
+    "tweet_text":"Yes! QOTD: \"Anger kills the future.\" ~ @alextarhini_ http:\/\/t.co\/CUXJFcG91h History is on the side of the Optimists $SHAK $SNAP $AAPL\u201d",
+    "sentiment":{
+      "sentiment":"weakly positive",
+      "confidence":0.65
+    },
+    "performance":{
+      "error":"No price data available"
+    },
+    "sentiment_correct":{
+      "correct":false,
+      "expected_direction":"positive",
+      "actual_direction":"neutral",
+      "magnitude_match":"too_small"
+    }
+  },
+  {
+    "tweet_id":"658391877817753600",
+    "tweet_date":"2015-10-25 21:17:10",
+    "ticker":"AAPL",
+    "company":"Apple Inc.",
+    "tweet_text":"RT @StockTwits: Get ready. Seriously. Look who reports earnings.\n\nFULL CALENDAR: https:\/\/t.co\/lkjXMrfZ8t $AAPL $XOM $TWTR https:\/\/t.co\/8hly\u2026",
+    "sentiment":{
+      "sentiment":"neutral",
+      "confidence":0.65
+    },
+    "performance":{
+      "error":"No price data available"
+    },
+    "sentiment_correct":{
+      "correct":true,
+      "expected_direction":"neutral",
+      "actual_direction":"neutral",
+      "magnitude_match":"matched"
+    }
+  },
+  {
+    "tweet_id":"449601362465009665",
+    "tweet_date":"2014-03-28 17:38:12",
+    "ticker":"AAPL",
+    "company":"Apple Inc.",
+    "tweet_text":"Friday links: avoiding unforced errors. http:\/\/t.co\/0FvhDEVtWY via @abnormalreturns $EEM $MSFT $BAX $KING $AAPL",
+    "sentiment":{
+      "sentiment":"neutral",
+      "confidence":0.95
+    },
+    "performance":{
+      "error":"No price data available"
+    },
+    "sentiment_correct":{
+      "correct":true,
+      "expected_direction":"neutral",
+      "actual_direction":"neutral",
+      "magnitude_match":"matched"
+    }
+  },
+  {
+    "tweet_id":"487376333840740352",
+    "tweet_date":"2014-07-10 23:22:27",
+    "ticker":"WFC",
+    "company":"Wells Fargo & Co.",
+    "tweet_text":"RT @StockTwits: GET READY\n\nWells Fargo reports earnings on Friday morning. They haven't missed in 2 years --&gt; http:\/\/t.co\/Bf1hlYHYAX $WFC",
+    "sentiment":{
+      "sentiment":"weakly positive",
+      "confidence":0.75
+    },
+    "performance":{
+      "error":"No price data available"
+    },
+    "sentiment_correct":{
+      "correct":false,
+      "expected_direction":"positive",
+      "actual_direction":"neutral",
+      "magnitude_match":"too_small"
+    }
+  },
+  {
+    "tweet_id":"514190234108825600",
+    "tweet_date":"2014-09-22 23:11:19",
+    "ticker":"BABA",
+    "company":"Alibaba Group Holding",
+    "tweet_text":"RT @ReformedBroker: Jack Ma must be replaced, failure to create shareholder value hourly RT @EddyElfenbein: $BABA is down to $90. Question:\u2026",
+    "sentiment":{
+      "sentiment":"strongly negative",
+      "confidence":0.85
+    },
+    "performance":{
+      "error":"No price data available"
+    },
+    "sentiment_correct":{
+      "correct":false,
+      "expected_direction":"negative",
+      "actual_direction":"neutral",
+      "magnitude_match":"too_small"
+    }
+  },
+  {
+    "tweet_id":"529334724993773568",
+    "tweet_date":"2014-11-03 18:10:07",
+    "ticker":"BABA",
+    "company":"Alibaba Group Holding",
+    "tweet_text":"RT @StockTwits: The USD, $BABA's Earnings Call, and Sunny Solar Stocks ($TAN); all here in the StockTwits Weekly Email &gt; http:\/\/t.co\/afusXk\u2026",
+    "sentiment":{
+      "sentiment":"neutral",
+      "confidence":0.7
+    },
+    "performance":{
+      "error":"No price data available"
+    },
+    "sentiment_correct":{
+      "correct":true,
+      "expected_direction":"neutral",
+      "actual_direction":"neutral",
+      "magnitude_match":"matched"
+    }
+  },
+  {
+    "tweet_id":"588345776314589186",
+    "tweet_date":"2015-04-15 14:18:58",
+    "ticker":"BAC",
+    "company":"Bank of America",
+    "tweet_text":"RT @StockTwits: Companies reporting earnings today include:\n\n\u2022 $BAC\n\u2022 $NFLX\n\u2022 $SNDK\n\u2022 $DAL\n\u2022 $SCHW\n\u2022 $KMI\n\nComplete calendar -&gt; http:\/\/t.co\u2026",
+    "sentiment":{
+      "sentiment":"neutral",
+      "confidence":0.98
+    },
+    "performance":{
+      "error":"No price data available"
+    },
+    "sentiment_correct":{
+      "correct":true,
+      "expected_direction":"neutral",
+      "actual_direction":"neutral",
+      "magnitude_match":"matched"
+    }
+  },
+  {
+    "tweet_id":"438034768102305792",
+    "tweet_date":"2014-02-24 19:36:41",
+    "ticker":"FB",
+    "company":"Facebook Inc.",
+    "tweet_text":"RT @StockTwits: Facebook hit a new all-time high today at $71.44\/share and is now up 6% since acquiring WhatsApp: http:\/\/t.co\/g74mDslzjA $FB",
+    "sentiment":{
+      "sentiment":"weakly positive",
+      "confidence":0.75
+    },
+    "performance":{
+      "error":"No price data available"
+    },
+    "sentiment_correct":{
+      "correct":false,
+      "expected_direction":"positive",
+      "actual_direction":"neutral",
+      "magnitude_match":"too_small"
+    }
+  },
+  {
+    "tweet_id":"433697429922127872",
+    "tweet_date":"2014-02-12 20:21:39",
+    "ticker":"CSCO",
+    "company":"Cisco Systems Inc.",
+    "tweet_text":"RT @StockTwits: Cashtaggers Bullish on $CSCO Before Earnings http:\/\/t.co\/mKqzM27Q3j",
+    "sentiment":{
+      "sentiment":"weakly positive",
+      "confidence":0.75
+    },
+    "performance":{
+      "error":"No price data available"
+    },
+    "sentiment_correct":{
+      "correct":false,
+      "expected_direction":"positive",
+      "actual_direction":"neutral",
+      "magnitude_match":"too_small"
+    }
+  }
+]
