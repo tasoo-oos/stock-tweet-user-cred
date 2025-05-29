@@ -1,53 +1,60 @@
 import json
+from ossaudiodev import error
+
 import pandas as pd
 from datetime import datetime, timedelta
 import logging
 from pathlib import Path
-from typing import Dict, List, Any, Tuple
+from typing import Dict, List, Any, Tuple, Dict, Optional
 import numpy as np
 from openai import OpenAI
+from rich.logging import RichHandler
+from rich.progress import Progress, TextColumn, BarColumn, TaskProgressColumn
+from rich.console import Console
 import time
-from tqdm import tqdm
+import os
 import dotenv
 
 # Load environment variables from .env file
 dotenv.load_dotenv()
 
+# Initialize Rich console for logging
+console = Console()
+
 # Set up logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    handlers=[RichHandler(console=console, rich_tracebacks=True)]
+)
 logger = logging.getLogger(__name__)
 
 class TweetSentimentAnalyzer:
-    """Analyzes tweet sentiment using GPT-4.1 API"""
+    """Analyzes tweet sentiment using OpenAI's model"""
 
-    def __init__(self, api_key: str = None):
-        self.client = OpenAI(api_key=api_key)
+    def __init__(self, openai_api_key: str = None):
+        self.client = OpenAI(api_key=openai_api_key)
         self.sentiment_levels = [
-            "strongly negative",
-            "weakly negative",
+            "negative",
             "neutral",
-            "weakly positive",
-            "strongly positive"
+            "positive"
         ]
 
-    def analyze_sentiment(self, tweet_text: str, stock_ticker: str, company_name: str = None) -> Dict[str, Any]:
+    def analyze_sentiment(self, tweet_text: str, stock_ticker: str, company_name: str = None) \
+            -> Optional[Dict[str, float]]:
         """
         Analyze sentiment of a single tweet about a stock
         Returns sentiment level and reasoning
         """
 
-        # Build the prompt with context about stock analysis
-        prompt = \
-f"""
-You are a financial sentiment analyst. Your job is to classify the sentiment of tweets about stocks. Think of the timeframe as the next 14 trading days after the post.
+        system_prompt = \
+f"""You are a precise financial sentiment analyst. Your job is to classify the sentiment of tweets about stocks. Think of the timeframe as the next 2 weeks after the post.
 
 Classify the sentiment as one of these exact phrases:
-- strongly negative: Very bearish, predicting significant decline
-- weakly negative: Slightly bearish, some concerns
-- neutral: No clear positive or negative stance
-- weakly positive: Slightly bullish, some optimism  
-- strongly positive: Very bullish, predicting significant gains
-
+- negative: Bearish sentiment about the stock, implying a decline in price in the near future.
+- neutral: No clear sentiment, or mixed signals about the stock's future.
+- positive: Bullish sentiment about the stock, implying an increase in price in the near future.
+    
 Consider:
 1. Direct statements about the stock's future
 2. Emotional tone and language intensity
@@ -55,57 +62,55 @@ Consider:
 4. Overall market sentiment conveyed
 5. Any relevant context about the company or sector
 
-Respond in JSON format:
-{{
-    "sentiment": "one of the five sentiment levels",
-    "confidence": 0.0-1.0
-}}
+Respond in one word, nothing else.
+"""
 
-Now, analyze the tweet about {stock_ticker} {f'({company_name})' if company_name else ''} and classify its outlook on the stock.
+        # Build the prompt with context about stock analysis
+        user_prompt = \
+f"""Target stock: {stock_ticker} {f'({company_name})' if company_name else ''}
 
-Tweet: 
+Tweet:
 ```txt
 {tweet_text}
 ```"""
 
         try:
             response = self.client.chat.completions.create(
-                model="gpt-4.1",
+                model="gpt-4.1-2025-04-14",
                 messages=[
                     {
                         "role": "system",
-                        "content": "You are a precise financial sentiment analyst. Always respond only in valid JSON format."
+                        "content": system_prompt
                     },
                     {
                         "role": "user",
-                        "content": prompt
+                        "content": user_prompt
                     }
                 ],
-                temperature=0.1,  # Lower temperature for more consistent classification
-                max_tokens=200,
-                seed=42,  # For reproducibility
+                temperature=1,
+                max_tokens=1,
                 top_p=1.0,
+                seed=42,
                 frequency_penalty=0.0,
                 presence_penalty=0.0,
+                logprobs=True,
+                top_logprobs=5
             )
 
-            # Parse the response
-            result = json.loads(response.choices[0].message.content)
+            outlook_results = {}
 
-            # Validate sentiment is one of our categories
-            if result.get('sentiment') not in self.sentiment_levels:
-                logger.warning(f"Invalid sentiment returned: {result.get('sentiment')}")
-                result['sentiment'] = 'neutral'
+            for sentiment in self.sentiment_levels:
+                outlook_results[sentiment] = 0.0
 
-            return result
+            for prob in response.choices[0].logprobs.content[0].top_logprobs:
+                if prob.token in self.sentiment_levels:
+                    outlook_results[prob.token] = np.exp(prob.logprob).item()
+
+            return outlook_results
 
         except Exception as e:
             logger.error(f"Error analyzing sentiment: {e}")
-            return {
-                "sentiment": "neutral",
-                "confidence": 0.0,
-                "reasoning": f"Error in analysis: {str(e)}"
-            }
+            return None
 
 class StockPerformanceAnalyzer:
     """Analyzes stock performance after tweet dates"""
@@ -206,7 +211,7 @@ class TweetStockAnalyzer:
     """Main analyzer combining sentiment and stock performance"""
 
     def __init__(self, openai_api_key: str = None):
-        self.sentiment_analyzer = TweetSentimentAnalyzer(api_key=openai_api_key)
+        self.sentiment_analyzer = TweetSentimentAnalyzer(openai_api_key=openai_api_key)
         self.performance_analyzer = StockPerformanceAnalyzer()
         self.stock_mapping = self.load_stock_mapping()
 
@@ -264,70 +269,18 @@ class TweetStockAnalyzer:
             "company": company_name,
             "tweet_text": tweet_text[:200] + "..." if len(tweet_text) > 200 else tweet_text,
             "sentiment": sentiment_result,
-            "performance": performance_result,
-            "sentiment_correct": self.evaluate_prediction(
-                sentiment_result.get('sentiment', 'neutral'),
-                performance_result.get('simple_return_pct', 0)
-            )
+            "performance": performance_result
         }
 
-    def evaluate_prediction(self, sentiment: str, return_pct: float) -> Dict[str, Any]:
-        """
-        Evaluate if sentiment prediction was correct based on actual returns
-        """
-
-        # Define thresholds for different sentiment levels
-        thresholds = {
-            "strongly negative": -5.0,  # Expecting > 5% decline
-            "weakly negative": -2.0,    # Expecting 2-5% decline
-            "neutral": (-2.0, 2.0),     # Expecting -2% to +2%
-            "weakly positive": 2.0,      # Expecting 2-5% gain
-            "strongly positive": 5.0     # Expecting > 5% gain
-        }
-
-        # Check if prediction was correct
-        if sentiment == "neutral":
-            correct = thresholds["neutral"][0] <= return_pct <= thresholds["neutral"][1]
-        elif sentiment == "strongly negative":
-            correct = return_pct <= thresholds["strongly negative"]
-        elif sentiment == "weakly negative":
-            correct = thresholds["strongly negative"] < return_pct <= thresholds["weakly negative"]
-        elif sentiment == "weakly positive":
-            correct = thresholds["weakly positive"] <= return_pct < thresholds["strongly positive"]
-        elif sentiment == "strongly positive":
-            correct = return_pct >= thresholds["strongly positive"]
-        else:
-            correct = False
-
-        return {
-            "correct": correct,
-            "expected_direction": "negative" if "negative" in sentiment else ("positive" if "positive" in sentiment else "neutral"),
-            "actual_direction": "negative" if return_pct < -2 else ("positive" if return_pct > 2 else "neutral"),
-            "magnitude_match": self.check_magnitude_match(sentiment, return_pct)
-        }
-
-    def check_magnitude_match(self, sentiment: str, return_pct: float) -> str:
-        """Check if the magnitude of the move matched the sentiment strength"""
-
-        abs_return = abs(return_pct)
-
-        if "strongly" in sentiment and abs_return >= 5:
-            return "matched"
-        elif "weakly" in sentiment and 2 <= abs_return < 5:
-            return "matched"
-        elif sentiment == "neutral" and abs_return < 2:
-            return "matched"
-        elif abs_return < 2:
-            return "too_small"
-        else:
-            return "too_large"
 
 def main():
     """Main execution function"""
 
+    save_path = Path(os.getcwd()) / "cache"
+
     # Load tweet data
     logger.info("Loading tweet data...")
-    df = pd.read_pickle('flattened_twitter_data.pkl')
+    df = pd.read_pickle(save_path / 'flattened_twitter_data.pkl')
 
     # Get Environment Variables
     openai_api_key = dotenv.get_key(dotenv.find_dotenv(), "OPENAI_API_KEY")
@@ -349,39 +302,49 @@ def main():
 
     logger.info(f"Analyzing {len(sample_df)} tweets...")
 
-    for idx, row in tqdm(sample_df.iterrows(), total=len(sample_df)):
-        result = analyzer.analyze_tweet_performance(row)
-        results.append(result)
+    with Progress(
+            TextColumn("[bold blue]Analyzing tweets..."),
+            BarColumn(),
+            TaskProgressColumn(),
+            console=console  # Important: use the same console instance
+    ) as progress:
 
-        # Rate limiting for API calls
-        time.sleep(0.5)  # Adjust based on your API limits
+        task = progress.add_task("Analyzing tweets...", total=len(sample_df))
+
+        for idx, row in sample_df.iterrows():
+            result = analyzer.analyze_tweet_performance(row)
+            results.append(result)
+            progress.advance(task, advance=1)
+
+    json_path = save_path / 'tweet_sentiment_analysis_results.json'
+    with open(json_path, 'wt', encoding='utf-8') as f:
+        json.dump(results, f, indent=2)
 
     # Convert results to DataFrame for analysis
-    results_df = pd.DataFrame(results)
+    flatten_results = []
+    error_results = []
+    error_cnt = 0
+    for res in results:
+        if 'error' not in res:
+            flatten_result = {}
+            for key in res:
+                if type(res[key]) is dict:
+                    for sub_key, value in res[key].items():
+                        flatten_result[f"{key}_{sub_key}"] = value
+                else:
+                    flatten_result[key] = res[key]
+            flatten_results.append(flatten_result)
+        else:
+            error_cnt += 1
+            error_results.append({
+                "tweet_id": res.get('tweet_id', ''),
+                "error": res['error']
+            })
+
+    results_df = pd.DataFrame(flatten_results)
 
     # Save results
-    results_df.to_json('tweet_sentiment_analysis_results.json', orient='records', indent=2)
-    results_df.to_csv('tweet_sentiment_analysis_results.csv', index=False)
-
-    # Calculate summary statistics
-    valid_results = results_df[~results_df['performance'].apply(lambda x: 'error' in x)]
-
-    if len(valid_results) > 0:
-        accuracy = valid_results['sentiment_correct'].apply(lambda x: x['correct']).mean()
-
-        logger.info(f"\n=== Analysis Summary ===")
-        logger.info(f"Total tweets analyzed: {len(results_df)}")
-        logger.info(f"Valid results: {len(valid_results)}")
-        logger.info(f"Overall accuracy: {accuracy:.2%}")
-
-        # Accuracy by sentiment type
-        for sentiment in ["strongly negative", "weakly negative", "neutral", "weakly positive", "strongly positive"]:
-            sentiment_results = valid_results[
-                valid_results['sentiment'].apply(lambda x: x.get('sentiment') == sentiment)
-            ]
-            if len(sentiment_results) > 0:
-                sent_accuracy = sentiment_results['sentiment_correct'].apply(lambda x: x['correct']).mean()
-                logger.info(f"{sentiment}: {sent_accuracy:.2%} ({len(sentiment_results)} tweets)")
+    results_df.to_csv(save_path / 'tweet_sentiment_analysis_results.csv', index=False)
 
     return results_df
 

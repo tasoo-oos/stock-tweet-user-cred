@@ -1,4 +1,6 @@
 import json
+import os
+
 import pandas as pd
 from datetime import datetime
 import logging
@@ -6,7 +8,10 @@ from pathlib import Path
 from typing import Dict, List, Any
 
 # Set up logging to track progress
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s'
+)
 logger = logging.getLogger(__name__)
 
 
@@ -449,7 +454,7 @@ def filter_overlapping_data(target_df: pd.DataFrame) -> pd.DataFrame:
         pd.DataFrame: Filtered DataFrame
     """
     # First, validate that our required columns exist in the DataFrame
-    target_columns = ['text', 'created_at']
+    target_columns = ['text', 'file_date', 'stock_ticker']
     missing_columns = [col for col in target_columns if col not in target_df.columns]
 
     if missing_columns:
@@ -513,10 +518,21 @@ if __name__ == "__main__":
         # Analyze the results
         analyze_dataframe(df)
 
+        save_path = Path(os.getcwd()) / "cache"
+        save_path.mkdir(parents=True, exist_ok=True)
+
         # Save to file for future use
-        output_file = "flattened_twitter_data.pkl"
-        df.to_pickle(output_file)
-        print(f"\nFlattened DataFrame saved to {output_file}")
+        pickle_file = "flattened_twitter_data.pkl"
+        pickle_dir = save_path / pickle_file
+
+        csv_file = "flattened_twitter_data.csv"
+        csv_dir = save_path / csv_file
+
+        df.to_pickle(pickle_dir)
+        df.to_csv(csv_dir, index=False)
+
+        print(f"\nFlattened DataFrame saved to {pickle_dir}")
+        print(f"CSV version saved to {csv_dir}")
         print("You can load it later with: df = pd.read_pickle('flattened_twitter_data.pkl')")
 
         # Also save a CSV sample (first 1000 rows) for inspection
@@ -525,7 +541,9 @@ if __name__ == "__main__":
         # print(f"Sample (first 1000 rows) saved to {sample_file}")
 
         # Save column information
-        with open("column_info.txt", "w") as f:
+        column_info_path = save_path / "column_info.txt"
+
+        with open(column_info_path, 'wt', encoding='utf-8') as f:
             f.write("FLATTENED TWITTER DATA COLUMNS\n")
             f.write("=" * 50 + "\n\n")
 

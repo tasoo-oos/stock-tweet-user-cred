@@ -1,13 +1,6 @@
 # Environment files
 .env
 
-# Python cache files
-*.txt
-*.log
-*.pkl
-*.csv
-*.json
-
 # Python bytecode files
 __pycache__/
 
@@ -15,3 +8,5 @@ __pycache__/
 .ipynb_checkpoints/
 
 .idea/
+
+cache/
