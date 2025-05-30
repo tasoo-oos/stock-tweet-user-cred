@@ -293,7 +293,7 @@ def main():
     # You can set it as an environment variable: export OPENAI_API_KEY='your-key'
     analyzer = TweetStockAnalyzer(openai_api_key=openai_api_key)
 
-    user_df = pd.read_csv('cache/user_statistics2.csv')
+    user_df = pd.read_csv('user_statistics2.csv')
     eligible_users = user_df[user_df['tweet_count'] >= 10]['user_id']
     logger.info(f"Processing {len(eligible_users)} users with ≥10 tweets")
 
