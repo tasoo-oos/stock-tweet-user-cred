@@ -294,56 +294,72 @@ def main():
     analyzer = TweetStockAnalyzer(openai_api_key=openai_api_key)
 
     user_df = pd.read_csv('cache/user_statistics2.csv')
-    for user_id in user_df[user_df['tweet_count']>=10]['user_id']:
-        sample_df = df_with_text[df_with_text['user_id'] == user_id]
+    eligible_users = user_df[user_df['tweet_count'] >= 10]['user_id']
+    logger.info(f"Processing {len(eligible_users)} users with ≥10 tweets")
 
-        results = []
+    # 디렉토리 생성
+    (save_path / 'result_json').mkdir(exist_ok=True)
+    (save_path / 'result_csv').mkdir(exist_ok=True)
 
-        logger.info(f"Analyzing USER-{user_id}'s tweets (len: {len(sample_df)})...")
+    for i, user_id in enumerate(eligible_users, 1):
+        try:
+            sample_df = df_with_text[df_with_text['user_id'] == user_id]
 
-        with Progress(
-                #TextColumn("[bold blue]Analyzing tweets..."),
-                BarColumn(),
-                TaskProgressColumn(),
-                console=console  # Important: use the same console instance
-        ) as progress:
+            if sample_df.empty:
+                logger.warning(f"No tweets found for user {user_id}")
+                continue
 
-            task = progress.add_task("Analyzing tweets...", total=len(sample_df))
+            logger.info(f"[{i}/{len(eligible_users)}] Analyzing USER-{user_id}'s tweets (len: {len(sample_df)})...")
 
-            for idx, row in sample_df.iterrows():
-                result = analyzer.analyze_tweet_performance(row)
-                results.append(result)
-                progress.advance(task, advance=1)
+            results = []
 
-        json_path = save_path / 'result_json' / user_id+'_results.json'
-        with open(json_path, 'wt', encoding='utf-8') as f:
-            json.dump(results, f, indent=2)
+            with Progress(
+                    #TextColumn("[bold blue]Analyzing tweets..."),
+                    BarColumn(),
+                    TaskProgressColumn(),
+                    console=console  # Important: use the same console instance
+            ) as progress:
 
-        # Convert results to DataFrame for analysis
-        flatten_results = []
-        error_results = []
-        error_cnt = 0
-        for res in results:
-            if 'error' not in res:
-                flatten_result = {}
-                for key in res:
-                    if type(res[key]) is dict:
-                        for sub_key, value in res[key].items():
-                            flatten_result[f"{key}_{sub_key}"] = value
-                    else:
-                        flatten_result[key] = res[key]
-                flatten_results.append(flatten_result)
-            else:
-                error_cnt += 1
-                error_results.append({
-                    "tweet_id": res.get('tweet_id', ''),
-                    "error": res['error']
-                })
+                task = progress.add_task("Analyzing tweets...", total=len(sample_df))
 
-        results_df = pd.DataFrame(flatten_results)
+                for idx, row in sample_df.iterrows():
+                    result = analyzer.analyze_tweet_performance(row)
+                    results.append(result)
+                    progress.advance(task, advance=1)
 
-        # Save results
-        results_df.to_csv(save_path / 'result_csv' / user_id+'_results.csv', index=False)
+            json_path = save_path / 'result_json' / f'{user_id}_results.json'
+            with open(json_path, 'wt', encoding='utf-8') as f:
+                json.dump(results, f, indent=2)
+
+            # Convert results to DataFrame for analysis
+            flatten_results = []
+            error_results = []
+            error_cnt = 0
+            for res in results:
+                if 'error' not in res:
+                    flatten_result = {}
+                    for key in res:
+                        if type(res[key]) is dict:
+                            for sub_key, value in res[key].items():
+                                flatten_result[f"{key}_{sub_key}"] = value
+                        else:
+                            flatten_result[key] = res[key]
+                    flatten_results.append(flatten_result)
+                else:
+                    error_cnt += 1
+                    error_results.append({
+                        "tweet_id": res.get('tweet_id', ''),
+                        "error": res['error']
+                    })
+
+            results_df = pd.DataFrame(flatten_results)
+
+            # Save results
+            results_df.to_csv(save_path / 'result_csv' / f'{user_id}_results.csv', index=False)
+        except Exception as e:
+            logger.error(f"Failed to process user {user_id}: {e}")
+            input("keep going? :")
+            continue
 
     return results_df
 
