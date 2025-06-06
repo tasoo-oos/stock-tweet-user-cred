@@ -207,13 +207,18 @@ def main():
         df['new_query1'] = processed_queries_v1
         df['new_query2'] = processed_queries_v2
 
+        df.rename(columns={'query':'old_query'}, inplace=True)
+        df.rename(columns={'new_query1':'query'}, inplace=True)
+
         # 각 스플릿에 대한 별도의 출력 파일 이름 생성
         # 예: flare_edited_train.csv, flare_edited_test.csv
         output_file_name = f"{OUTPUT_CSV_FILE.stem}_{split_name}{OUTPUT_CSV_FILE.suffix}"
         output_path = OUTPUT_CSV_FILE.parent / output_file_name # Path 객체로 경로 조합
 
-        df.to_csv(output_path, index=False, encoding='utf-8')
-        print(f"Successfully processed {split_name} and saved to {output_path}")
+        #df.to_csv(output_path, index=False, encoding='utf-8')
+        output_path_parquet = output_path.with_suffix('.parquet')
+        df.to_parquet(output_path_parquet, index=False)
+        print(f"Successfully processed {split_name} and saved to {output_path_parquet}")
 
         # 예시 출력 (필요한 경우, 각 스플릿의 첫 번째 항목)
         if not df.empty and 'new_query1' in df.columns and not df['new_query1'].empty:
