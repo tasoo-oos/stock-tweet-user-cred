@@ -142,6 +142,7 @@ class GPTModel(BaseLLM):
             return self._generate_sequential(prompts)
 
     def _generate_batch(self, dataset, evaluator) -> List[str]:
+        ids = [doc['id'] for doc in dataset]
         prompts = [evaluator.create_prompt(doc) for doc in dataset]
         gold_labels = [evaluator.get_gold_label(doc) for doc in dataset]
         """Batch API를 사용하여 여러 프롬프트를 처리합니다."""
@@ -151,7 +152,8 @@ class GPTModel(BaseLLM):
         batch_requests = []
         for i, prompt in enumerate(prompts):
             now_datetime = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-            custom_id = f"request-{now_datetime}-{i}-{gold_labels[i]}"
+            custom_id = f"request-{now_datetime}-{i}-{ids[i]}-{gold_labels[i]}"
+            # ex) request-20250624_114958-0-aclsm23336-rise
 
             if self.system_instruction:
                 messages = [
@@ -261,7 +263,7 @@ class GPTModel(BaseLLM):
 
                 # custom_id에서 인덱스 추출 (예: "request-일시-0" -> 0)
                 try:
-                    index = int(custom_id.split('-')[-2])
+                    index = int(custom_id.split('-')[-3])
 
                     if result.get("response") and result["response"].get("body"):
                         response_body = result["response"]["body"]
@@ -635,7 +637,7 @@ def check_batch(batch_id):
             evaluator = StockMovementEvaluator()
 
             # gold 라벨 추출을 위한 데이터셋 로드
-            dataset_path = "./cache/flare_edited_test.parquet"
+            dataset_path = "./cache/flare_edited_test.parquet" # 일단 flare_edited 데이터셋을 사용하면 괜찮은데, 그렇지 않으면 문제 발생.
             logger.info(f"로컬 Parquet 파일 로드: {dataset_path}")
             dataset_df = pd.read_parquet(dataset_path)
 
@@ -651,7 +653,7 @@ def check_batch(batch_id):
             for idx, line in enumerate(output_json_list):
                 line = json.loads(line)
                 custom_id = line.get('custom_id')
-                df_idx = int(custom_id.split('-')[-2])
+                # df_idx = int(custom_id.split('-')[-3])
                 response_body = line.get('response', {}).get('body', {})
                 if response_body and 'choices' in response_body:
                     response_str = response_body.get('choices', [])[0].get('message', {}).get('content', '')
