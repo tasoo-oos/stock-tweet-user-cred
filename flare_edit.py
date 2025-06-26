@@ -2,6 +2,7 @@ import pandas as pd
 import re
 import json
 from pathlib import Path  # os 모듈 대신 pathlib 사용
+import numpy as np
 
 # --- 상수 정의 ---
 DATA_SPLITS = {
@@ -10,8 +11,10 @@ DATA_SPLITS = {
     'valid': 'data/valid-00000-of-00001-7ec206eb036ab81e.parquet'
 }
 DATASET_URL_PREFIX = "hf://datasets/TheFinAI/flare-sm-acl/"
+TWEET_SENTIMENT_OUTPUT_CSV_FILE = Path('cache/output_table_user_and_stock.csv') # 트윗별 감성 예측 및 실제 주가 변화율까지도 매핑된 풀버전 csv
 TWEET_RAW_DATA_DIR = Path('dataset/tweet/raw/')
-OUTPUT_CSV_FILE = Path('cache/flare_edited.csv')
+OUTPUT_CSV_FILE = Path('cache/custom_benchmark/flare_edited.csv')
+OUTPUT_CSV_FILE.mkdir(parents=True, exist_ok=True) # 요 위치 맞나
 ANSWER_SUFFIX = 'Answer:'
 
 # 정규 표현식
@@ -22,6 +25,8 @@ DATE_IN_FOLLOWING_PATTERN = r'\n\d{4}-\d{2}-\d{2}: '  # 원본 유지, 대신 st
 USER_PATTERN = r'@[A-Za-z0-9_]{1,15}:'
 URL_PATTERN = r'https?://[^\s]+'
 
+count_non_exist=0
+count_exist=0
 
 # --- 도우미 함수 ---
 
@@ -67,21 +72,32 @@ def format_tweet_text(text: str) -> str:
     return processed_text
 
 
-def process_tweet_file(ticker: str, date_str: str) -> tuple[list[str], list[str]]:
+def process_tweet_file(ticker: str, date_str: str, sentiment_df: pd.DataFrame, user_cred_df: pd.DataFrame) -> tuple[list[str], list[str], list[str], list[str]]:
     """
     주어진 티커와 날짜에 해당하는 트윗 파일을 읽고 처리합니다.
-    두 가지 버전의 트윗 목록을 반환합니다:
-    1. 정제된 트윗 텍스트만 포함
-    2. 정제된 트윗 텍스트와 메타데이터 포함
+    네 가지 버전의 트윗 목록을 반환합니다:
+    1. basic
+    2. non_neutral
+    3. exclude_low
+    4. include_cred
     """
     file_path = TWEET_RAW_DATA_DIR / ticker.upper() / date_str
+    cred_mean = user_cred_df['con_acc_log1p'].mean()
+    # cred_std = user_cred_df['con_acc_log1p'].std()
+    cred_threshold = cred_mean
+    high_cred_user_df = user_cred_df[user_cred_df['con_acc_log1p'] >= cred_threshold]
 
-    tweets_v1 = []  # 텍스트만
-    tweets_v2 = []  # 텍스트 + 메타데이터
+    global count_non_exist
+    global count_exist
+
+    tweets_basic = []
+    tweets_non_neutral = []
+    tweets_exclude_low = []
+    tweets_include_cred = []
 
     if not file_path.exists():
         print(f"File not found: {file_path}")
-        return tweets_v1, tweets_v2
+        return [], [], [], []
 
     try:
         with file_path.open('r', encoding='utf-8') as f:
@@ -90,23 +106,36 @@ def process_tweet_file(ticker: str, date_str: str) -> tuple[list[str], list[str]
                     tweet_data = json.loads(line.strip())
 
                     text = tweet_data.get('text', '')
+                    tweet_id = int(tweet_data.get('id', 0))
                     formatted_text = format_tweet_text(text)
 
-                    tweets_v1.append(f'- "{formatted_text}"')
+                    # 변인 통제를 위해, sentiment_df에 있는 tweet_id만 사용
+                    if sentiment_df[sentiment_df['tweet_id']==tweet_id].empty:
+                        count_non_exist+=1
+                        continue
+                    count_exist += 1
 
-                    # 메타데이터 포함 버전
+                    tweets_basic.append(f'- "{formatted_text}"')
+
+                    # neutral 거르기
+                    if sentiment_df[sentiment_df['tweet_id']==tweet_id].iloc[0]['sentiment'] != 'neutral':
+                        continue
+                    tweets_non_neutral.append(f'- "{formatted_text}"')
+
+                    # user 정보 불러오기
                     user_info = tweet_data.get('user', {})
-                    uid = user_info.get('id_str', '')
-                    followers_count = user_info.get('followers_count', '')
-                    retweet_count = tweet_data.get('retweet_count', '')
-                    favorite_count = tweet_data.get('favorite_count', '')
+                    uid = int(user_info.get('id', 0))
 
-                    tweet_v2_lines = [
-                        f'- "{formatted_text}"',
-                        f'- user_id: {uid}',
-                        f'- user_followers: {followers_count}'
-                    ]
-                    tweets_v2.extend(tweet_v2_lines)
+                    # threshold보다 낮은 신뢰도를 가진 유저 거르기
+                    if uid not in high_cred_user_df.index:
+                        continue
+                    user_cred_row = high_cred_user_df.loc[uid]
+
+                    tweets_exclude_low.append(f'- "{formatted_text}"')
+
+                    # 메타 데이터 포함
+                    tweets_include_cred.append(f'- "{formatted_text}"')
+                    tweets_include_cred.append(f'- user_credibility: {high_cred_user_df.loc[uid]['con_acc_log1p']}')
 
                 except json.JSONDecodeError as e_json:
                     print(f"Error decoding JSON in file {file_path}, line: {line.strip()}: {e_json}")
@@ -117,12 +146,12 @@ def process_tweet_file(ticker: str, date_str: str) -> tuple[list[str], list[str]
         print(f"File not found (double check): {file_path}")
     except Exception as e:  # 그 외 일반적인 파일 처리 오류
         print(f"Error processing file {file_path}: {e}")
+        raise
+    return tweets_basic, tweets_non_neutral, tweets_exclude_low, tweets_include_cred
 
-    return tweets_v1, tweets_v2
 
-
-def process_single_query(query_text: str) -> tuple[str, str]:
-    """단일 쿼리를 처리하여 두 가지 버전의 새로운 쿼리 문자열을 생성합니다."""
+def process_single_query(query_text: str, sentiment_df: pd.DataFrame, user_cred_df: pd.DataFrame) -> tuple[str, str, str, str]:
+    """단일 쿼리를 처리하여 네 가지 버전의 새로운 쿼리 문자열을 생성합니다."""
     try:
         ticker, prefix, following_text = extract_query_parts(query_text)
     except ValueError as e:
@@ -131,8 +160,7 @@ def process_single_query(query_text: str) -> tuple[str, str]:
         # 오류 발생 시 처리 방식: 원본 쿼리에 에러 메시지와 함께 Answer 접미사 추가
         # 또는 (None, None)을 반환하여 main 로직에서 해당 쿼리 건너뛰기 등의 다른 처리도 가능
         error_message_suffix = f" [Error: Could not process query - {e}]"
-        return (query_text.strip() + error_message_suffix + '\n' + ANSWER_SUFFIX,
-                query_text.strip() + error_message_suffix + '\n' + ANSWER_SUFFIX)
+        return (query_text.strip() + error_message_suffix + '\n' + ANSWER_SUFFIX,)*4
 
     # DEBUG: print("\nProcessing Prefix: " + prefix) # ticker는 항상 존재한다고 가정
 
@@ -142,40 +170,62 @@ def process_single_query(query_text: str) -> tuple[str, str]:
     # 원본 코드: dt=dt[1:-2]
     dates_to_process = [d.strip('\n :') for d in matched_dates_with_format]
 
-    all_tweets_for_query_v1 = [prefix, ""]  # prefix와 빈 줄로 시작 (나중에 \n\n으로 join)
-    all_tweets_for_query_v2 = [prefix, ""]
+    query_list = [[prefix, ""] ]*4# prefix와 빈 줄로 시작 (나중에 \n\n으로 join)
 
     for date_str in dates_to_process:
         # 해당 날짜의 트윗 내용 생성
         current_date_header = f"{date_str}:"
 
-        tweets_v1_for_date, tweets_v2_for_date = process_tweet_file(ticker, date_str)
+        preprocessed_tweets_for_date = process_tweet_file(ticker, date_str, sentiment_df, user_cred_df)
 
-        if tweets_v1_for_date:  # 트윗이 있는 경우에만 헤더와 함께 추가
-            all_tweets_for_query_v1.append(current_date_header)
-            all_tweets_for_query_v1.extend(tweets_v1_for_date)
-        else:
-            all_tweets_for_query_v1.append("")
-
-        if tweets_v2_for_date:
-            all_tweets_for_query_v2.append(current_date_header)
-            all_tweets_for_query_v2.extend(tweets_v2_for_date)
-        else:
-            all_tweets_for_query_v2.append("")
+        for i, tweets in  enumerate(preprocessed_tweets_for_date):
+            if tweets:  # 트윗이 있는 경우에만 헤더와 함께 추가
+                query_list[i].append(current_date_header)
+                query_list[i].extend(tweets)
+            else:
+                query_list[i].append("")
 
     # 최종 쿼리 문자열 생성
     # 각 부분을 개행 문자로 연결하고, 마지막에 Answer 접미사 추가
     # prefix와 첫번째 날짜 그룹 사이에 두번의 개행이 들어가도록 함.
-    # all_tweets_for_query_v1[1]이 "" 이므로, join 시 prefix + "\n\n" + date_header... 형태가 됨
-    new_query_v1 = "\n".join(all_tweets_for_query_v1) + '\n' + ANSWER_SUFFIX
-    new_query_v2 = "\n".join(all_tweets_for_query_v2) + '\n' + ANSWER_SUFFIX
+    # query_list[1]이 "" 이므로, join 시 prefix + "\n\n" + date_header... 형태가 됨
+    query_results = []
+    for queries in query_list:
+        query_results.append("\n".join(queries) + '\n' + ANSWER_SUFFIX)
 
-    return new_query_v1, new_query_v2
+    return tuple(query_results)
 
+def process_user_accuracy(df):
+    def correcting(x):
+        if x['Sentiment'] == 'positive' and x['High Change from Tweet (%)'] > 3: return True
+        if x['Sentiment'] == 'negative' and x['Low Change from Tweet (%)'] < -3: return True
+        return False
+    df['pred_correct'] = df.apply(correcting, axis=1)
+
+    d = {}
+    d['simple_accuracy'] = len(df[df['pred_correct']]) / len(df)
+    column_match = {'positive': 'High Change from Tweet (%)', 'negative': 'Low Change from Tweet (%)'}
+    df['correspond_change'] = df.apply(lambda x: abs(x[column_match[x['Sentiment']]]), axis=1)
+    d['continuous_accuracy'] = df['correspond_change'].mean()
+    return pd.Series(d)
 
 # --- 메인 로직 ---
 def main():
     """메인 실행 함수"""
+    # sentiment_full_df 불러오기 (트윗별로 감성 분석 및 실제 주가 변동률이 기록된 db)
+    sentiment_full_df = pd.read_csv(TWEET_SENTIMENT_OUTPUT_CSV_FILE)
+
+    # sentiment_df 생성
+    custom_id_series = sentiment_full_df.apply(lambda x: int(x['Custom ID'].split('-')[-1]), axis=1) # custom id에서 트윗 id를 정수로 추출
+    sentiment_df = pd.DataFrame()
+    sentiment_df['tweet_id'] = custom_id_series
+    sentiment_df['sentiment'] = sentiment_full_df['Sentiment']
+
+    # user_cred_df 생성
+    non_neutral_df = sentiment_full_df[sentiment_full_df['Sentiment']!='neutral'] # user별 신뢰도 산정을 위해선 neutral을 일단 제거해야 함.
+    user_cred_df = non_neutral_df.groupby('user_id').apply(process_user_accuracy)
+    user_cred_df['con_acc_log1p'] = np.log1p(user_cred_df['continuous_accuracy'])
+
     for split_name in DATA_SPLITS.keys():
         print(f"\n--- Processing data split: {split_name} ---")
         try:
@@ -191,8 +241,10 @@ def main():
             print(f"DataFrame for split '{split_name}' is empty or failed to load. Skipping.")
             continue
 
-        processed_queries_v1 = []
-        processed_queries_v2 = []
+        processed_queries_basic = [] # flare 원본 데이터셋 조금 수정 -> 모든 트윗 포함 + 형식 약간 바꿈
+        processed_queries_non_neutral = [] # basic에서 neutral인 트윗만 제거
+        processed_queries_exclude_low = [] # non_neutral + 임계값 이하의 신뢰도를 가진 유저를 제거
+        processed_queries_include_cred = [] # exclude_low + 유저 신뢰도를 프롬프트에 추가
 
         # DataFrame의 'query' 열을 순회하며 처리
         total_queries = len(df['query'])
@@ -200,19 +252,22 @@ def main():
         for idx, query_text in enumerate(df['query']):
             if (idx + 1) % 100 == 0: # 100개마다 진행 상황 표시 (큰 데이터셋의 경우 유용)
                 print(f"Processing query {idx+1}/{total_queries} for split {split_name}...")
-            new_q1, new_q2 = process_single_query(query_text)
-            processed_queries_v1.append(new_q1)
-            processed_queries_v2.append(new_q2)
+            new_q1, new_q2, new_q3, new_q4 = process_single_query(query_text, sentiment_df, user_cred_df)
+            processed_queries_basic.append(new_q1)
+            processed_queries_non_neutral.append(new_q2)
+            processed_queries_exclude_low.append(new_q3)
+            processed_queries_include_cred.append(new_q4)
 
-        df['new_query1'] = processed_queries_v1
-        df['new_query2'] = processed_queries_v2
+        df['basic_query'] = processed_queries_basic
+        df['non_neutral_query'] = processed_queries_non_neutral
+        df['exclude_low_query'] = processed_queries_exclude_low
+        df['include_cred_query'] = processed_queries_include_cred
 
         df.rename(columns={'query':'old_query'}, inplace=True)
-        df.rename(columns={'new_query1':'query'}, inplace=True)
 
         # 각 스플릿에 대한 별도의 출력 파일 이름 생성
         # 예: flare_edited_train.csv, flare_edited_test.csv
-        output_file_name = f"{OUTPUT_CSV_FILE.stem}_{split_name}{OUTPUT_CSV_FILE.suffix}"
+        output_file_name = f"{OUTPUT_CSV_FILE.stem}_{split_name}_{OUTPUT_CSV_FILE.suffix}"
         output_path = OUTPUT_CSV_FILE.parent / output_file_name # Path 객체로 경로 조합
 
         #df.to_csv(output_path, index=False, encoding='utf-8')
@@ -231,6 +286,8 @@ def main():
 
 if __name__ == '__main__':
     main()
+    print('non_exist:', count_non_exist)
+    print('exist:', count_exist)
 
     # 제공된 예제 테스트 (주석 해제하여 사용)
     example1 = """By reviewing the data and tweets, can we predict if the closing price of $aapl will go upwards or downwards at 2015-12-31? Please indicate either Rise or Fall.

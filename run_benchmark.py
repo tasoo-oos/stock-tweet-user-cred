@@ -101,7 +101,7 @@ class VLLMModel(BaseLLM):
 class GPTModel(BaseLLM):
     """OpenAI의 GPT API를 호출하는 클래스 (Batch API 지원)"""
 
-    def __init__(self, model_path_or_name: str, **kwargs):
+    def __init__(self, model_path_or_name: str, query_type:str, **kwargs):
         try:
             import openai
         except ImportError:
@@ -133,8 +133,10 @@ class GPTModel(BaseLLM):
         self.batch_check_interval = kwargs.get("batch_check_interval", 10)  # 10초마다 상태 확인
         self.max_batch_wait_time = kwargs.get("max_batch_wait_time", 3600)  # 최대 1시간 대기
 
+        self.query_type = query_type
+
     def generate(self, dataset, evaluator) -> List[str]:
-        prompts = [evaluator.create_prompt(doc) for doc in dataset]
+        prompts = [evaluator.create_prompt(doc, self.query_type) for doc in dataset]
         """프롬프트 리스트를 받아 생성된 텍스트 리스트를 반환합니다."""
         if self.use_batch_api and len(prompts) > 1:
             return self._generate_batch(dataset, evaluator)
@@ -143,7 +145,7 @@ class GPTModel(BaseLLM):
 
     def _generate_batch(self, dataset, evaluator) -> List[str]:
         ids = [doc['id'] for doc in dataset]
-        prompts = [evaluator.create_prompt(doc) for doc in dataset]
+        prompts = [evaluator.create_prompt(doc, self.query_type) for doc in dataset]
         gold_labels = [evaluator.get_gold_label(doc) for doc in dataset]
         """Batch API를 사용하여 여러 프롬프트를 처리합니다."""
         logger.info(f"[GPT Batch] {len(prompts)}개 프롬프트를 Batch API로 처리 시작")
@@ -339,11 +341,14 @@ class StockMovementEvaluator:
     DEFAULT = "error" # PIXIU에서는 fall로 지정함.
     GOLD_LABELS = ["rise", "fall"]
 
-    def create_prompt(self, doc: Dict[str, Any]) -> str:
+    def create_prompt(self, doc: Dict[str, Any], query_column="") -> str:
         """
-        아직까진 별다른 옵션 x. 그냥 그대로 출력.
+        벤치마크 데이터셋에서 어떤 컬럼을 프롬프트 컬럼으로 선택할지
+        ex) 기본 프롬프트 vs neutral 제거 프롬프트 vs ...
         """
-        return doc["query"]
+        if not query_column:
+            query_column = 'query'
+        return doc[query_column]
 
     def process_single_result(self, generated_text: str) -> str:
         """모델 출력을 정규화된 레이블('rise' 또는 'fall')로 변환합니다."""
@@ -420,7 +425,7 @@ def show_metrics(gold_labels, predicted_labels, labels=['rise','fall'], error_la
 
 # --- 메인 평가 함수 ---
 
-def run_evaluation(config: Dict[str, Any], num_samples: int) -> Dict[str, Any]:
+def run_evaluation(config: Dict[str, Any], num_samples: int, query_type: str) -> Dict[str, Any]:
     """설정값을 바탕으로 평가를 수행하는 메인 함수"""
     logger.info("=" * 50)
     logger.info(f"벤치마크 평가를 시작합니다: {config.get('experiment_name', 'Untitled')}")
@@ -443,7 +448,7 @@ def run_evaluation(config: Dict[str, Any], num_samples: int) -> Dict[str, Any]:
     if model_type == 'vllm':
         model = VLLMModel(model_path_or_name, **config)
     elif model_type == 'gpt':
-        model = GPTModel(model_path_or_name, **config)
+        model = GPTModel(model_path_or_name, query_type, **config)
     else:
         raise ValueError(f"지원하지 않는 모델 타입입니다: {model_type}")
 
@@ -478,7 +483,7 @@ def run_evaluation(config: Dict[str, Any], num_samples: int) -> Dict[str, Any]:
 
     evaluator = StockMovementEvaluator()
 
-    prompts = [evaluator.create_prompt(doc) for doc in dataset] # 아직까진 별다른 프롬프트 설정 x. doc["query"]만 추출
+    prompts = [evaluator.create_prompt(doc, query_type) for doc in dataset] # 프롬프트 컬럼 선택
     gold_labels = [evaluator.get_gold_label(doc) for doc in dataset]
     logger.info(f"총 {len(prompts)}개의 평가 데이터 준비 완료.")
 
@@ -505,7 +510,7 @@ def get_default_configs() -> Dict[str, Dict[str, Any]]:
     """기본 설정들을 반환합니다."""
     # 상수
     basic_gpt_model = "gpt-4.1-mini-2025-04-14"
-    flare_edited_dataset_path = "./cache/flare_edited_test.parquet"
+    flare_edited_dataset_path = "./cache/custom_benchmark/flare_edited_test_.parquet"
 
     # gpt 관련 config 정의
     gpt_batch_base_config = {
@@ -637,11 +642,9 @@ def check_batch(batch_id):
             evaluator = StockMovementEvaluator()
 
             # gold 라벨 추출을 위한 데이터셋 로드
-            dataset_path = "./cache/flare_edited_test.parquet" # 일단 flare_edited 데이터셋을 사용하면 괜찮은데, 그렇지 않으면 문제 발생.
+            dataset_path = "./cache/custom_benchmark/flare_edited_test_.parquet" # 일단 flare_edited 데이터셋을 사용하면 괜찮은데, 그렇지 않으면 문제 발생.
             logger.info(f"로컬 Parquet 파일 로드: {dataset_path}")
             dataset_df = pd.read_parquet(dataset_path)
-
-            prompts = [evaluator.create_prompt(doc) for _, doc in dataset_df.iterrows()]  # 아직까진 별다른 프롬프트 설정 x. doc["query"]만 추출
 
             # 파일로 저장 - csv
             d = {'custom_id': [],
@@ -791,8 +794,9 @@ if __name__ == "__main__":
 
     # call: 새로운 batch API 작업 호출
     call_parser.add_argument("--config", type=str, help="JSON 설정 파일 경로")
-    call_parser.add_argument("--num-samples", type=int, default=0, help="Batch API로 호출할 샘플 데이터 수 (미지정 시 일괄 실행)")
     call_parser.add_argument("--scenario", type=str, choices=list(get_default_configs().keys()), help="실행할 시나리오 선택")
+    call_parser.add_argument("--num-samples", type=int, default=0, help="Batch API로 호출할 샘플 데이터 수 (미지정 시 일괄 실행)")
+    call_parser.add_argument("--query-type", type=str, default='basic_query', help="flare_edited 파일 호출 시 어떤 쿼리를 사용할지 (basic/non_neutral/exclude_low/include_cred)")
 
     # check: batch ID를 입력하면, 해당 batch 작업의 현황 또는 결과 확인
     check_parser.add_argument("--batch-id", type=str, required=True, help="현황을 확인하려는 Batch ID 입력")
@@ -823,10 +827,11 @@ if __name__ == "__main__":
                 logger.error(f"설정 파일 '{args.config}' 파싱 오류. 기본 설정을 사용합니다.")
 
         try:
-            results = run_evaluation(config, args.num_samples) # 일단은 None
+            results = run_evaluation(config, args.num_samples, args.query_type) # 일단은 None
             logger.info("평가가 성공적으로 완료되었습니다.")
         except Exception as e:
             logger.error(f"평가 중 오류 발생: {e}")
+            raise
             sys.exit(1)
 
     elif args.command == 'check':
