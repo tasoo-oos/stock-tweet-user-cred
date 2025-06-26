@@ -72,7 +72,7 @@ def format_tweet_text(text: str) -> str:
     return processed_text
 
 
-def process_tweet_file(ticker: str, date_str: str, sentiment_df: pd.DataFrame, user_cred_df: pd.DataFrame) -> tuple[list[str], list[str], list[str], list[str]]:
+def process_tweet_file(ticker: str, date_str: str, query_types, sentiment_df: pd.DataFrame, user_cred_df: pd.DataFrame):
     """
     주어진 티커와 날짜에 해당하는 트윗 파일을 읽고 처리합니다.
     네 가지 버전의 트윗 목록을 반환합니다:
@@ -83,21 +83,22 @@ def process_tweet_file(ticker: str, date_str: str, sentiment_df: pd.DataFrame, u
     """
     file_path = TWEET_RAW_DATA_DIR / ticker.upper() / date_str
     cred_mean = user_cred_df['con_acc_log1p'].mean()
-    # cred_std = user_cred_df['con_acc_log1p'].std()
-    cred_threshold = cred_mean
+    cred_std = user_cred_df['con_acc_log1p'].std()
+    cred_threshold = cred_mean # 기본 임계값은 평균으로 설정.
     high_cred_user_df = user_cred_df[user_cred_df['con_acc_log1p'] >= cred_threshold]
+    high_cred_user_df_plus_half_std = user_cred_df[user_cred_df['con_acc_log1p'] >= cred_mean+0.5*cred_std]
+    high_cred_user_df_minus_half_std = user_cred_df[user_cred_df['con_acc_log1p'] >= cred_mean-0.5*cred_std]
 
     global count_non_exist
     global count_exist
 
-    tweets_basic = []
-    tweets_non_neutral = []
-    tweets_exclude_low = []
-    tweets_include_cred = []
+    tweets_dic = {}
+    for query in query_types:
+        tweets_dic[query] = []
 
     if not file_path.exists():
         print(f"File not found: {file_path}")
-        return [], [], [], []
+        return tweets_dic
 
     try:
         with file_path.open('r', encoding='utf-8') as f:
@@ -115,27 +116,35 @@ def process_tweet_file(ticker: str, date_str: str, sentiment_df: pd.DataFrame, u
                         continue
                     count_exist += 1
 
-                    tweets_basic.append(f'- "{formatted_text}"')
+                    tweets_dic['basic'].append(f'- "{formatted_text}"')
 
                     # neutral 거르기
                     if sentiment_df[sentiment_df['tweet_id']==tweet_id].iloc[0]['sentiment'] != 'neutral':
                         continue
-                    tweets_non_neutral.append(f'- "{formatted_text}"')
+                    tweets_dic['non_neutral'].append(f'- "{formatted_text}"')
 
                     # user 정보 불러오기
                     user_info = tweet_data.get('user', {})
                     uid = int(user_info.get('id', 0))
 
                     # threshold보다 낮은 신뢰도를 가진 유저 거르기
-                    if uid not in high_cred_user_df.index:
-                        continue
-                    user_cred_row = high_cred_user_df.loc[uid]
+                    if uid in high_cred_user_df.index:
+                        user_cred_row = high_cred_user_df.loc[uid]
 
-                    tweets_exclude_low.append(f'- "{formatted_text}"')
+                        tweets_dic['exclude_low'].append(f'- "{formatted_text}"')
 
-                    # 메타 데이터 포함
-                    tweets_include_cred.append(f'- "{formatted_text}"')
-                    tweets_include_cred.append(f'- user_credibility: {high_cred_user_df.loc[uid]['con_acc_log1p']}')
+                        # 메타 데이터 포함
+                        tweets_dic['include_cred'].extend([
+                            f'- "{formatted_text}"',
+                            f'- user_credibility: {user_cred_row['con_acc_log1p']}'
+                        ])
+
+                    if uid in high_cred_user_df_plus_half_std.index:
+                        tweets_dic['exclude_low+0.5s'].append(f'- "{formatted_text}"')
+
+
+                    if uid in high_cred_user_df_minus_half_std.index:
+                        tweets_dic['exclude_low-0.5s'].append(f'- "{formatted_text}"')
 
                 except json.JSONDecodeError as e_json:
                     print(f"Error decoding JSON in file {file_path}, line: {line.strip()}: {e_json}")
@@ -147,10 +156,10 @@ def process_tweet_file(ticker: str, date_str: str, sentiment_df: pd.DataFrame, u
     except Exception as e:  # 그 외 일반적인 파일 처리 오류
         print(f"Error processing file {file_path}: {e}")
         raise
-    return tweets_basic, tweets_non_neutral, tweets_exclude_low, tweets_include_cred
+    return tweets_dic
 
 
-def process_single_query(query_text: str, sentiment_df: pd.DataFrame, user_cred_df: pd.DataFrame) -> tuple[str, str, str, str]:
+def process_single_query(query_text: str, query_types, sentiment_df: pd.DataFrame, user_cred_df: pd.DataFrame):
     """단일 쿼리를 처리하여 네 가지 버전의 새로운 쿼리 문자열을 생성합니다."""
     try:
         ticker, prefix, following_text = extract_query_parts(query_text)
@@ -160,7 +169,7 @@ def process_single_query(query_text: str, sentiment_df: pd.DataFrame, user_cred_
         # 오류 발생 시 처리 방식: 원본 쿼리에 에러 메시지와 함께 Answer 접미사 추가
         # 또는 (None, None)을 반환하여 main 로직에서 해당 쿼리 건너뛰기 등의 다른 처리도 가능
         error_message_suffix = f" [Error: Could not process query - {e}]"
-        return (query_text.strip() + error_message_suffix + '\n' + ANSWER_SUFFIX,)*4
+        return {}
 
     # DEBUG: print("\nProcessing Prefix: " + prefix) # ticker는 항상 존재한다고 가정
 
@@ -170,30 +179,34 @@ def process_single_query(query_text: str, sentiment_df: pd.DataFrame, user_cred_
     # 원본 코드: dt=dt[1:-2]
     dates_to_process = [d.strip('\n :') for d in matched_dates_with_format]
 
-    query_list = [[prefix, ""] ]*4# prefix와 빈 줄로 시작 (나중에 \n\n으로 join)
+    query_list_dic = {}
+    for query in query_types:
+        query_list_dic[query] = [prefix, ""]# prefix와 빈 줄로 시작 (나중에 \n\n으로 join)
 
     for date_str in dates_to_process:
         # 해당 날짜의 트윗 내용 생성
         current_date_header = f"{date_str}:"
 
-        preprocessed_tweets_for_date = process_tweet_file(ticker, date_str, sentiment_df, user_cred_df)
+        preprocessed_tweets_for_date = process_tweet_file(ticker, date_str, query_types, sentiment_df, user_cred_df)
 
-        for i, tweets in  enumerate(preprocessed_tweets_for_date):
+        for query in preprocessed_tweets_for_date:
+            tweets = preprocessed_tweets_for_date[query]
             if tweets:  # 트윗이 있는 경우에만 헤더와 함께 추가
-                query_list[i].append(current_date_header)
-                query_list[i].extend(tweets)
+                query_list_dic[query].append(current_date_header)
+                query_list_dic[query].extend(tweets)
             else:
-                query_list[i].append("")
+                query_list_dic[query].append("")
 
     # 최종 쿼리 문자열 생성
     # 각 부분을 개행 문자로 연결하고, 마지막에 Answer 접미사 추가
     # prefix와 첫번째 날짜 그룹 사이에 두번의 개행이 들어가도록 함.
-    # query_list[1]이 "" 이므로, join 시 prefix + "\n\n" + date_header... 형태가 됨
-    query_results = []
-    for queries in query_list:
-        query_results.append("\n".join(queries) + '\n' + ANSWER_SUFFIX)
+    # ""인 경우, join 시 prefix + "\n\n" + date_header... 형태가 됨
+    query_results_dic = {}
+    for query in query_list_dic:
+        queries = query_list_dic[query]
+        query_results_dic[query] = "\n".join(queries) + '\n' + ANSWER_SUFFIX
 
-    return tuple(query_results)
+    return query_results_dic
 
 def process_user_accuracy(df):
     def correcting(x):
@@ -241,10 +254,16 @@ def main():
             print(f"DataFrame for split '{split_name}' is empty or failed to load. Skipping.")
             continue
 
-        processed_queries_basic = [] # flare 원본 데이터셋 조금 수정 -> 모든 트윗 포함 + 형식 약간 바꿈
-        processed_queries_non_neutral = [] # basic에서 neutral인 트윗만 제거
-        processed_queries_exclude_low = [] # non_neutral + 임계값 이하의 신뢰도를 가진 유저를 제거
-        processed_queries_include_cred = [] # exclude_low + 유저 신뢰도를 프롬프트에 추가
+        processed_queries_dic = {
+            'basic':[], # flare 원본 데이터셋 조금 수정 -> 모든 트윗 포함 + 형식 약간 바꿈
+            'non_neutral':[], # basic에서 neutral인 트윗만 제거
+            'exclude_low':[], # non_neutral + 임계값 이하의 신뢰도를 가진 유저를 제거
+            'include_cred':[], # exclude_low + 유저 신뢰도를 프롬프트에 추가
+
+            'exclude_low+0.5s':[], # exclude_low에서 threshold를 평균+0.5표준편차로 설정 (상위 30%만 남김)
+            'exclude_low-0.5s':[] # exclude_low에서 threshold를 평균-0.5표준편차로 설정 (상위 70%만 남김)
+        }
+        query_types = list(processed_queries_dic.keys())
 
         # DataFrame의 'query' 열을 순회하며 처리
         total_queries = len(df['query'])
@@ -252,16 +271,12 @@ def main():
         for idx, query_text in enumerate(df['query']):
             if (idx + 1) % 100 == 0: # 100개마다 진행 상황 표시 (큰 데이터셋의 경우 유용)
                 print(f"Processing query {idx+1}/{total_queries} for split {split_name}...")
-            new_q1, new_q2, new_q3, new_q4 = process_single_query(query_text, sentiment_df, user_cred_df)
-            processed_queries_basic.append(new_q1)
-            processed_queries_non_neutral.append(new_q2)
-            processed_queries_exclude_low.append(new_q3)
-            processed_queries_include_cred.append(new_q4)
+            new_queries = process_single_query(query_text, query_types, sentiment_df, user_cred_df)
+            for query in new_queries:
+                processed_queries_dic[query].append(new_queries[query])
 
-        df['basic_query'] = processed_queries_basic
-        df['non_neutral_query'] = processed_queries_non_neutral
-        df['exclude_low_query'] = processed_queries_exclude_low
-        df['include_cred_query'] = processed_queries_include_cred
+        for query in processed_queries_dic:
+            df[query+'_query'] = processed_queries_dic[query]
 
         df.rename(columns={'query':'old_query'}, inplace=True)
 
@@ -276,12 +291,8 @@ def main():
         print(f"Successfully processed {split_name} and saved to {output_path_parquet}")
 
         # 예시 출력 (필요한 경우, 각 스플릿의 첫 번째 항목)
-        if not df.empty and 'new_query1' in df.columns and not df['new_query1'].empty:
-            print(f"\n--- Example of new_query1 for {split_name} (first entry) ---")
-            print(df['new_query1'].iloc[0])
-        # if not df.empty and 'new_query2' in df.columns and not df['new_query2'].empty: # 필요시 new_query2 예시도 활성화
-        #     print(f"\n--- Example of new_query2 for {split_name} (first entry) ---")
-        #     print(df['new_query2'].iloc[0])
+        for query in query_types:
+            print(f'\n--- Example(first entry) of {query}_query for {split_name}-split')
 
 
 if __name__ == '__main__':
