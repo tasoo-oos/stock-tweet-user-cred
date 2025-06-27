@@ -7,11 +7,14 @@ from statsmodels.stats.contingency_tables import mcnemar
 batch_output_path = Path('cache/batch_output/csv')
 batch_id_match = {
     'basic':'batch_685cd0be015881908f09b9430bde0430',
+    'non_tweets':'batch_685d71b160ec8190a2dde5ad64f2a63f',
+
     'non_neutral':'batch_685ce8241c648190bf57f433f69ac8a4',
     'exclude_low':'batch_685cf93779388190a12643dba2978214',
     'include_cred':'batch_685d076df2a08190ac5aacb9b12ae75d',
-    'exclude_low+0.5s':'',
-    'exclude_low-0.5s':''
+
+    'exclude_low+0.5s':'batch_685d343e7b108190a6f116a6d3523b2a',
+    'exclude_low-0.5s':'batch_685d4bd0b4e08190b70f7accdfdf9f7a',
 }
 
 # --  함수 ---
