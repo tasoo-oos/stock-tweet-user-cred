@@ -12,7 +12,7 @@ CACHE_DIR = PROJECT_ROOT / "cache"
 PRICE_DATA_DIR = DATASET_DIR / "price" / "raw"
 TWEET_DATA_DIR = DATASET_DIR / "tweet" / "raw"
 BATCH_OUTPUT_DIR = CACHE_DIR / "batch_output"
-CUSTOM_BENCHMARK_DIR = CACHE_DIR / "custom_benchmark"
+CUSTOM_BENCHMARK_DIR = CACHE_DIR / "custom_benchmark_dataset"
 
 # Cache file paths
 COMBINED_JSONL_PATH = CACHE_DIR / "combined.jsonl"
