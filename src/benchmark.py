@@ -136,7 +136,7 @@ class BenchmarkRunner:
     def load_dataset(self) -> pd.DataFrame:
         """Load the dataset for evaluation."""
         dataset_path = self.config.get('dataset_path', str(FLARE_EDITED_TEST_PATH))
-        dataset_split = self.config.get('dataset_split', 'train')
+        dataset_split = self.config.get('dataset_split', 'acl_test')
         
         # Check if local file
         if Path(dataset_path).exists():

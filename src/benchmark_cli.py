@@ -50,7 +50,7 @@ def get_default_configs() -> Dict[str, Dict[str, Any]]:
         "model_path_or_name": "gpt-3.5-turbo",
         "system_instruction": DEFAULT_GPT_SYSTEM_INSTRUCTION,
         "dataset_path": "TheFinAI/flare-sm-acl",
-        "dataset_split": "test",
+        "dataset_split": "acl_test",
         "use_batch_api": True,
         "batch_check_interval": 10,
         "max_batch_wait_time": 3600
@@ -62,7 +62,7 @@ def get_default_configs() -> Dict[str, Dict[str, Any]]:
         "model_path_or_name": "TheFinAI/finma-7b-full",
         "system_instruction": None,
         "dataset_path": "TheFinAI/flare-sm-acl",
-        "dataset_split": "test",
+        "dataset_split": "acl_test",
         "tensor_parallel_size": 1,
         "trust_remote_code": True
     }

@@ -23,11 +23,11 @@ OUTPUT_TABLE_USER_STOCK_PATH = CACHE_DIR / "output_table_user_and_stock.csv"
 USER_CREDIBILITY_PATH = CACHE_DIR / "user_credibility.csv"
 COLUMN_INFO_PATH = CACHE_DIR / "column_info.txt"
 
-# Dataset configuration
+# Dataset configuration (acl, cikm, bigdata)
 FLARE_DATASET_SPLITS = {
-    'train': 'data/train-00000-of-00001-24d52140a30ef03c.parquet',
-    'test': 'data/test-00000-of-00001-9e63b9de85b2453a.parquet',
-    'valid': 'data/valid-00000-of-00001-7ec206eb036ab81e.parquet'
+    'acl_train': 'data/train-00000-of-00001-24d52140a30ef03c.parquet',
+    'acl_test': 'data/test-00000-of-00001-9e63b9de85b2453a.parquet',
+    'acl_valid': 'data/valid-00000-of-00001-7ec206eb036ab81e.parquet',
 }
 FLARE_DATASET_URL_PREFIX = "hf://datasets/TheFinAI/flare-sm-acl/"
 FLARE_EDITED_TEST_PATH = CUSTOM_BENCHMARK_DIR / "flare_edited_test_.parquet"
