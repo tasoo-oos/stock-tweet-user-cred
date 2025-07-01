@@ -4,7 +4,7 @@ from statsmodels.stats.contingency_tables import mcnemar
 
 # --- 상수 ---
 
-batch_output_path = Path('cache/batch_output/csv')
+batch_output_path = Path('cache/batch_benchmark_result/csv')
 batch_id_match = {
     'basic':'batch_685cd0be015881908f09b9430bde0430',
     'non_tweets':'batch_685d71b160ec8190a2dde5ad64f2a63f',
