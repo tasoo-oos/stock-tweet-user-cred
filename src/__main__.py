@@ -23,6 +23,7 @@ from .benchmark import BenchmarkRunner
 from .data_loader import DataLoader
 from .openai_client import OpenAIClient
 from .benchmark_cli import check_batch, list_batch_id, get_default_configs
+from .generate_prompts import GeneratePrompts
 
 logger = setup_logging(__name__)
 
@@ -40,6 +41,8 @@ Examples:
   python -m src benchmark --scenario gpt-batch-sample --num-samples 100
   python -m src parse --input raw_tweets.json --output parsed_tweets.csv
   python -m src query --input tweets.csv --model gpt-4.1-mini-2025-04-14
+  python -m src stats ~
+  python -m src generate-prompts ~
         """
     )
     
@@ -212,7 +215,26 @@ Examples:
         default="mcnemar",
         help="Statistical test to perform (default: mcnemar)"
     )
-    
+
+    prompts_parse = subparsers.add_parser(
+        "generate-prompts",
+        help="Generate prompts for benchmark experiments"
+    )
+    prompts_parse.add_argument(
+        "--dataset",
+        type=str,
+        choices=["flare-acl", "kaggle-1"],
+        default="flare-acl",
+        help="Configuration"
+    )
+    prompts_parse.add_argument(
+        "--split",
+        type=str,
+        choices=["all", "train", "test", "valid"],
+        default="all",
+        help="Configuration"
+    )
+
     args = parser.parse_args()
     
     if not args.command:
@@ -284,7 +306,13 @@ Examples:
             logger.info(f"Running {args.test} test between {args.input1} and {args.input2}")
             # TODO: Import and run p_value analysis
             logger.warning("Statistical analysis functionality needs to be integrated")
-            
+
+        elif args.command == "generate-prompts":
+            logger.info(f"dataset: {args.dataset} / split: {args.split}")
+            generator = GeneratePrompts(args.dataset, args.split)
+            result = generator.process_and_save()
+            logger.info("Completed successfully")
+
         else:
             logger.error(f"Unknown command: {args.command}")
             sys.exit(1)
@@ -294,6 +322,7 @@ Examples:
         sys.exit(130)
     except Exception as e:
         logger.error(f"Error executing {args.command}: {e}")
+        raise
         sys.exit(1)
 
 
