@@ -1,17 +1,29 @@
+# ========== Setting Files ==========
+
 # Environment files
 .env
 
 # Python bytecode files
 __pycache__/
 
+# Python Virtual Env
+venv
+myenv
+
 # Jupyter Notebook checkpoints
 .ipynb_checkpoints/
 
+# JetBrains IDE MetaData
 .idea/
 
-cache/
-
+# Mac
 .DS_Store
 
-venv
 
+# ========== Large Files ==========
+
+# Cache Folder
+cache/
+
+# Datasets Folder
+datasets/

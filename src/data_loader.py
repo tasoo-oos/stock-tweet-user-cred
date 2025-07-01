@@ -13,8 +13,8 @@ from datasets import load_dataset
 from .constants import (
     FLARE_DATASET_SPLITS,
     FLARE_DATASET_URL_PREFIX,
-    PRICE_DATA_DIR,
-    TWEET_DATA_DIR,
+    ACL18_PRICE_DATA_DIR,
+    ACL18_TWEET_DATA_DIR,
     STOCK_TABLE_PATH
 )
 from .utils import setup_logging
@@ -78,9 +78,9 @@ class DataLoader:
         
         try:
             # Try with and without $ prefix
-            file_path = PRICE_DATA_DIR / f"{ticker.replace('$', '')}.csv"
+            file_path = ACL18_PRICE_DATA_DIR / f"{ticker.replace('$', '')}.csv"
             if not file_path.exists():
-                file_path = PRICE_DATA_DIR / f"{ticker}.csv"
+                file_path = ACL18_PRICE_DATA_DIR / f"{ticker}.csv"
             
             df = pd.read_csv(file_path)
             df['Date'] = pd.to_datetime(df['Date'])
@@ -96,7 +96,7 @@ class DataLoader:
     
     def load_tweet_file(self, ticker: str, date_str: str) -> List[Dict[str, Any]]:
         """Load tweets from a specific file."""
-        file_path = TWEET_DATA_DIR / ticker.upper() / date_str
+        file_path = ACL18_TWEET_DATA_DIR / ticker.upper() / date_str
         tweets = []
         
         if not file_path.exists():

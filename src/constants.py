@@ -6,22 +6,27 @@ from pathlib import Path
 # Project root directory
 PROJECT_ROOT = Path(__file__).parent.parent
 
+# Datasets directories
+DATASETS_DIR = PROJECT_ROOT / "datasets"
+ACL18_DATASET_DIR = DATASETS_DIR / "acl18_dataset"
+ACL18_PRICE_DATA_DIR = ACL18_DATASET_DIR / "price" / "raw"
+ACL18_TWEET_DATA_DIR = ACL18_DATASET_DIR / "tweet" / "raw"
+
 # Data directories
-DATASET_DIR = PROJECT_ROOT / "dataset"
 CACHE_DIR = PROJECT_ROOT / "cache"
-PRICE_DATA_DIR = DATASET_DIR / "price" / "raw"
-TWEET_DATA_DIR = DATASET_DIR / "tweet" / "raw"
-BATCH_OUTPUT_DIR = CACHE_DIR / "batch_output"
-CUSTOM_BENCHMARK_DIR = CACHE_DIR / "custom_benchmark_dataset"
+BATCH_OUTPUT_DIR = CACHE_DIR / "batch_benchmark_result" # Batch API로 benchmark를 돌린(주가 예측을 한) 결과를 저장하는 경로
+CUSTOM_BENCHMARK_DIR = CACHE_DIR / "custom_benchmark_datasets" # benchmark 실행을 위한 커스텀 데이터셋(flare_edited~.parquet 등)을 저장하는 경로
+TWEET_SENTIMENT_RESULTS_DIR = CACHE_DIR / "tweet_sentiment_results" # tweet별로 감성 분석을 실행한 결과를 저장하는 경로 (~_combined.jsonl이 저장됨)
+FLATTENED_TWITTER_DIR = CACHE_DIR / "flattened_twitter"
+JOIN_TWEET_AND_STOCK_DIR = CACHE_DIR / "join_tweet_and_stock"
 
 # Cache file paths
-COMBINED_JSONL_PATH = CACHE_DIR / "combined.jsonl"
-FLATTENED_TWITTER_CSV_PATH = CACHE_DIR / "flattened_twitter_data.csv"
-FLATTENED_TWITTER_PKL_PATH = CACHE_DIR / "flattened_twitter_data.pkl"
-OUTPUT_TABLE_STOCK_PATH = CACHE_DIR / "output_table_with_stock_data.csv"
-OUTPUT_TABLE_USER_STOCK_PATH = CACHE_DIR / "output_table_user_and_stock.csv"
-USER_CREDIBILITY_PATH = CACHE_DIR / "user_credibility.csv"
-COLUMN_INFO_PATH = CACHE_DIR / "column_info.txt"
+COMBINED_JSONL_PATH = CACHE_DIR / TWEET_SENTIMENT_RESULTS_DIR / "acl18_combined.jsonl"
+FLATTENED_TWITTER_CSV_PATH = CACHE_DIR / FLATTENED_TWITTER_DIR / "flattened_twitter_data.csv"
+FLATTENED_TWITTER_PKL_PATH = CACHE_DIR / FLATTENED_TWITTER_DIR / "flattened_twitter_data.pkl"
+COLUMN_INFO_PATH = CACHE_DIR / FLATTENED_TWITTER_DIR / "column_info.txt"
+OUTPUT_TABLE_STOCK_PATH = CACHE_DIR / JOIN_TWEET_AND_STOCK_DIR / "output_table_with_stock_data.csv"
+OUTPUT_TABLE_USER_STOCK_PATH = CACHE_DIR / JOIN_TWEET_AND_STOCK_DIR / "output_table_user_and_stock.csv"
 
 # Dataset configuration (acl, cikm, bigdata)
 FLARE_DATASET_SPLITS = {

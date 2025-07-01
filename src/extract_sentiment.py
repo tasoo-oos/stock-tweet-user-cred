@@ -12,7 +12,7 @@ import numpy as np
 from .constants import (
     COMBINED_JSONL_PATH,
     OUTPUT_TABLE_STOCK_PATH,
-    PRICE_DATA_DIR,
+    ACL18_PRICE_DATA_DIR,
     SENTIMENT_LEVELS,
     BUSINESS_DAYS_FORWARD
 )
