@@ -14,7 +14,8 @@ from .constants import (
     DEFAULT_GPT_MODEL,
     DEFAULT_GPT_SYSTEM_INSTRUCTION,
     FLARE_EDITED_TEST_PATH,
-    BATCH_OUTPUT_DIR
+    BATCH_OUTPUT_DIR,
+    BATCH_ID_MATCH
 )
 from .utils import setup_logging
 
@@ -77,6 +78,9 @@ def get_default_configs() -> Dict[str, Dict[str, Any]]:
 
 def check_batch(batch_id: str) -> None:
     """Check batch status and results."""
+    if batch_id in BATCH_ID_MATCH.keys():
+        batch_id = BATCH_ID_MATCH[batch_id]
+
     output_jsonl_path = BATCH_OUTPUT_DIR / "jsonl" / f"{batch_id}.jsonl"
     output_csv_path = BATCH_OUTPUT_DIR / "csv" / f"{batch_id}.csv"
     
