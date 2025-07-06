@@ -32,10 +32,17 @@ class PValueCalculator:
             print('비교할 batch가 2개 이상이어야 합니다.')
             return
 
-        # vs
+        # 모든 조합에 대해 순서대로 비교
         for criterion_i, criterion in enumerate(self.tf_df.columns):
             for query_type in self.tf_df.iloc[:, criterion_i+1:]:
                 print(f'[{criterion} vs {query_type}]')
+
+                # 길이 미스매칭 시 건너뛰기
+                len_criterion = len(self.tf_df[criterion])
+                len_query_type = len(self.tf_df[query_type])
+                if len_criterion != len_query_type:
+                    print(f'- 길이 mismatch: {len_criterion} vs {len_query_type}\n')
+                    continue
 
                 # 결과 계산
                 result, matrix22 = self.calculate_mcnemar(self.tf_df[criterion], self.tf_df[query_type])
