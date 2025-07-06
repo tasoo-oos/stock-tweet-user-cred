@@ -148,6 +148,29 @@ class BenchmarkRunner:
         else:
             # Load from Hugging Face
             return self.data_loader.load_flare_dataset(dataset_split)
+
+    def sample_dataset(self, df: pd.DataFrame, num_samples: int) -> pd.DataFrame: # rise와 fall 비율을 똑같게 샘플링
+        """
+        Sample the dataset to balance rise and fall labels.
+
+        Args:
+            df: The full dataset
+            num_samples: Number of samples to return
+
+        Returns:
+            Sampled DataFrame with balanced rise and fall labels
+        """
+        split_size = (num_samples+1)//2
+
+        min_size = df.groupby('gold').size().min()
+        if min_size < split_size:
+            split_size = min_size
+
+        sampled_df = df.groupby('gold').sample(n=split_size, random_state=42).reset_index(drop=True)
+        if num_samples % 2 == 1:
+            sampled_df.drop(len(sampled_df) - 1, inplace=True, axis=0)  # Drop last row if odd
+
+        return sampled_df
     
     def run_evaluation(
         self, 
@@ -173,7 +196,7 @@ class BenchmarkRunner:
         
         # Sample if requested
         if num_samples > 0:
-            dataset = dataset.head(num_samples)
+            dataset = self.sample_dataset(dataset)
         
         logger.info(f"Evaluating {len(dataset)} samples")
         
