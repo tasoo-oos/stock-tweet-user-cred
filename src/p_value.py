@@ -26,7 +26,7 @@ class PValueCalculator:
 
     def show_pvalue(self, batches, test_func='mcnemar'):
 
-        self.create_batch_df(batches)
+        self.create_tf_df(batches)
         print('유효한 batch ID/닉네임:', self.tf_df.columns)
         if len(self.tf_df.columns) < 2:
             print('비교할 batch가 2개 이상이어야 합니다.')
@@ -45,7 +45,12 @@ class PValueCalculator:
                     continue
 
                 # 결과 계산
-                result, matrix22 = self.calculate_mcnemar(self.tf_df[criterion], self.tf_df[query_type])
+                if test_func == 'mcnemar':
+                    # McNemar's test
+                    result, matrix22 = self.calculate_mcnemar(self.tf_df[criterion], self.tf_df[query_type])
+                elif test_func == 'exact':
+                    # Exact Binomial Test
+                    result, matrix22 = self.calculate_mcnemar(self.tf_df[criterion], self.tf_df[query_type], exact=True)
 
                 # matrix 출력
                 matrix_df = pd.DataFrame(matrix22)
@@ -75,7 +80,7 @@ class PValueCalculator:
                 query_types.append(key)
         return query_types
 
-    def create_batch_df(self, batches):
+    def create_tf_df(self, batches):
         """
         Creates a DataFrame containing true/false predictions for specified batches.
         """
@@ -92,9 +97,12 @@ class PValueCalculator:
             batch_output_file_path = self.batch_output_path / f'{batch_id}.{self.batch_savefile_type}'
             result_df = pd.read_csv(batch_output_file_path)
             result_df['true_false'] = result_df['gold_label'] == result_df['pred_label']
+            #if 'confidence' in result_df.columns:
+                #result_df['confidence'] = result_df['confidence'].astype(float)
+                #result_df['brier_score'] = (result_df['true_false'].astype(int)-result_df['confidence'])**2
             self.tf_df[batch] = result_df['true_false'].copy()
 
-    def calculate_mcnemar(self, series1, series2):
+    def calculate_mcnemar(self, series1, series2, exact=False):
         """
 
         Args:
@@ -113,6 +121,8 @@ class PValueCalculator:
         matrix22 = [[both_series.sum(), only_series1.sum()],
                     [only_series2.sum(), neither_series.sum()]]
 
-        result = mcnemar(matrix22, exact=False, correction=True)
+        result = mcnemar(matrix22, exact=exact, correction=True)
+        # exact=False가 기본값 (mcnemar)
+        # exact=True는 정확 이항 검정 (Exact Binomial Test)에 해당함.
 
         return result, matrix22

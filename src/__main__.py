@@ -208,7 +208,7 @@ Examples:
     stats_parser.add_argument(
         "--test",
         type=str,
-        choices=["mcnemar"],
+        choices=["mcnemar", "exact"],
         default="mcnemar",
         help="Statistical test to perform (default: mcnemar)"
     )
