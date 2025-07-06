@@ -24,6 +24,7 @@ from .data_loader import DataLoader
 from .openai_client import OpenAIClient
 from .benchmark_cli import check_batch, list_batch_id, get_default_configs
 from .generate_prompts import GeneratePrompts
+from .p_value import PValueCalculator
 
 logger = setup_logging(__name__)
 
@@ -196,18 +197,14 @@ Examples:
         "stats",
         help="Run statistical analysis (p-value calculations)"
     )
+    # 복수 개의 input 받기
     stats_parser.add_argument(
-        "--input1",
+        "--inputs",
         type=str,
-        required=True,
-        help="First results file for comparison"
+        nargs='+',
+        help="Input batch_id or nickname of batch for statistical comparison. If not provided, 모두에 대해 실행. (e.g., --inputs non_neutral batch_685ce8241c648190bf57f433f69ac8a4)"
     )
-    stats_parser.add_argument(
-        "--input2", 
-        type=str,
-        required=True,
-        help="Second results file for comparison"
-    )
+
     stats_parser.add_argument(
         "--test",
         type=str,
@@ -303,9 +300,13 @@ Examples:
                 logger.warning("Single tweet processing needs specific implementation")
                 
         elif args.command == "stats":
-            logger.info(f"Running {args.test} test between {args.input1} and {args.input2}")
-            # TODO: Import and run p_value analysis
-            logger.warning("Statistical analysis functionality needs to be integrated")
+            logger.info(f"Running {args.test} test on inputs: {args.inputs}")
+            calculator = PValueCalculator()
+            calculator.show_pvalue(
+                batches=args.inputs,
+                test_func=args.test
+            )
+            logger.info("Statistical analysis completed successfully")
 
         elif args.command == "generate-prompts":
             logger.info(f"dataset: {args.dataset} / split: {args.split}")

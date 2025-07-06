@@ -1,6 +1,17 @@
 """
 Central configuration and constants for the Stock Tweet User Credibility project.
+
+[Index]
+- Path
+- Dataset configuration
+- Model & Prompt & Batch configuration
+- Stock analysis configuration
+- Date and Text Patterns
+
 """
+
+# ========== Path ==========
+
 from pathlib import Path
 
 # Project root directory
@@ -28,6 +39,10 @@ COLUMN_INFO_PATH = CACHE_DIR / FLATTENED_TWITTER_DIR / "column_info.txt"
 OUTPUT_TABLE_STOCK_PATH = CACHE_DIR / JOIN_TWEET_AND_STOCK_DIR / "output_table_with_stock_data.csv"
 OUTPUT_TABLE_USER_STOCK_PATH = CACHE_DIR / JOIN_TWEET_AND_STOCK_DIR / "output_table_user_and_stock.csv"
 
+
+
+# ========== Dataset configuration ==========
+
 # Dataset configuration (acl, )
 FLARE_DATASET_SPLITS = {
     'acl_train': 'data/train-00000-of-00001-24d52140a30ef03c.parquet',
@@ -40,6 +55,10 @@ FLARE_EDITED_TEST_PATH = CUSTOM_BENCHMARK_DIR / (FLARE_EDITED_PREFIX + "acl_test
 
 # Stock mapping
 STOCK_TABLE_PATH = ACL18_DATASET_DIR / "StockTable"
+
+
+
+# ========== Model & Prompt & Batch configuration =========
 
 # Model configuration
 DEFAULT_GPT_MODEL = "gpt-4.1-mini-2025-04-14"
@@ -62,17 +81,36 @@ Begin your response immediately with "{"
 # Prompt configuration
 ANSWER_SUFFIX = '\nAnswer:'
 
-# Date patterns
-DATE_PATTERN = r'\d{4}-\d{2}-\d{2}'
-DATE_IN_FOLLOWING_PATTERN = r'\n\d{4}-\d{2}-\d{2}: '
+# Batch API configuration
+BATCH_CHECK_INTERVAL = 10  # seconds
+MAX_BATCH_WAIT_TIME = 3600  # 1 hour
+BATCH_API_MAX_RETRIES = 3
+BATCH_API_SLEEP_TIME = 5
 
-# Text patterns
-TICKER_PATTERN = r'\$[A-Za-z]{1,7}(?:-[A-Za-z]{1})?'
-USER_PATTERN = r'@[A-Za-z0-9_]{1,15}:'
-URL_PATTERN = r'https?://[^\s]+'
+# Batch IDs for evaluation (주요 배치 ID 저장)
+BATCH_ID_MATCH = {
+    'basic':'batch_685cd0be015881908f09b9430bde0430',
+    'non_tweets':'batch_685d71b160ec8190a2dde5ad64f2a63f',
+
+    'non_neutral':'batch_685ce8241c648190bf57f433f69ac8a4',
+    'exclude_low':'batch_685cf93779388190a12643dba2978214',
+    'include_cred':'batch_685d076df2a08190ac5aacb9b12ae75d',
+
+    'exclude_low+0.5s':'batch_685d343e7b108190a6f116a6d3523b2a',
+    'exclude_low-0.5s':'batch_685d4bd0b4e08190b70f7accdfdf9f7a',
+}
+
+# ========== Stock analysis configuration ==========
+
+# Business days for stock analysis
+BUSINESS_DAYS_FORWARD = 10  # 2 weeks
 
 # Sentiment levels
 SENTIMENT_LEVELS = ["negative", "neutral", "positive"]
+
+# Performance thresholds
+PRICE_RISE_THRESHOLD = 3.0  # 3% for rise
+PRICE_FALL_THRESHOLD = -3.0  # -3% for fall
 
 # Stock movement evaluation
 STOCK_MOVEMENT_LABELS = ["rise", "fall"]
@@ -82,18 +120,18 @@ STOCK_MOVEMENT_CHOICE_MAPPING = {
 }
 STOCK_MOVEMENT_DEFAULT = "error"
 
-# Performance thresholds
-PRICE_RISE_THRESHOLD = 3.0  # 3% for rise
-PRICE_FALL_THRESHOLD = -3.0  # -3% for fall
-
-# Batch API configuration
-BATCH_CHECK_INTERVAL = 10  # seconds
-MAX_BATCH_WAIT_TIME = 3600  # 1 hour
-BATCH_API_MAX_RETRIES = 3
-BATCH_API_SLEEP_TIME = 5
-
-# Business days for stock analysis
-BUSINESS_DAYS_FORWARD = 10  # 2 weeks
-
 # Wilson confidence interval
 WILSON_CONFIDENCE = 0.95
+
+
+
+# ========== Date and Text Patterns ==========
+
+# Date patterns
+DATE_PATTERN = r'\d{4}-\d{2}-\d{2}'
+DATE_IN_FOLLOWING_PATTERN = r'\n\d{4}-\d{2}-\d{2}: '
+
+# Text patterns
+TICKER_PATTERN = r'\$[A-Za-z]{1,7}(?:-[A-Za-z]{1})?'
+USER_PATTERN = r'@[A-Za-z0-9_]{1,15}:'
+URL_PATTERN = r'https?://[^\s]+'
