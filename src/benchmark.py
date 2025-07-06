@@ -196,7 +196,7 @@ class BenchmarkRunner:
         
         # Sample if requested
         if num_samples > 0:
-            dataset = self.sample_dataset(dataset)
+            dataset = self.sample_dataset(dataset, num_samples)
         
         logger.info(f"Evaluating {len(dataset)} samples")
         
