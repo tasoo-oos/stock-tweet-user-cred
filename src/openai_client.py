@@ -6,7 +6,7 @@ import time
 import json
 import logging
 import tempfile
-from typing import List, Dict, Any, Optional
+from typing import List, Tuple, Dict, Any, Optional
 from datetime import datetime
 
 import openai
@@ -18,7 +18,8 @@ from .constants import (
     BATCH_CHECK_INTERVAL,
     MAX_BATCH_WAIT_TIME,
     BATCH_API_MAX_RETRIES,
-    BATCH_API_SLEEP_TIME
+    BATCH_API_SLEEP_TIME,
+    BATCH_OUTPUT_DIR,
 )
 from .utils import setup_logging
 
@@ -109,7 +110,7 @@ class OpenAIClient:
         batch_check_interval: int = BATCH_CHECK_INTERVAL,
         max_wait_time: int = MAX_BATCH_WAIT_TIME,
         **kwargs
-    ) -> List[str]:
+    ) -> Tuple[str, List[str]]:
         """
         Generate completions using the Batch API.
         
@@ -124,7 +125,7 @@ class OpenAIClient:
             **kwargs: Additional parameters for the API
             
         Returns:
-            List of generated texts in the same order as prompts
+            Tuple of batch ID and list of generated texts
         """
         logger.info(f"Starting batch generation for {len(prompts)} prompts")
         
@@ -172,6 +173,9 @@ class OpenAIClient:
                 endpoint="/v1/chat/completions",
                 completion_window="24h"
             )
+
+            # batch id 출력
+            logger.info(f"Batch job created with ID: {batch_job.id}")
             
             # Wait for completion
             batch_job = self._wait_for_batch_completion(
@@ -182,9 +186,9 @@ class OpenAIClient:
             
             # Download and parse results
             logger.info("Downloading batch results...")
-            results = self._download_batch_results(batch_job.output_file_id, len(prompts))
+            results = self._download_batch_results(batch_job.id, batch_job.output_file_id, len(prompts))
             
-            return results
+            return batch_job.id, results
             
         finally:
             # Clean up temporary file
@@ -219,11 +223,14 @@ class OpenAIClient:
             
             time.sleep(check_interval)
     
-    def _download_batch_results(self, output_file_id: str, expected_count: int) -> List[str]:
+    def _download_batch_results(self, batch_id: str, output_file_id: str, expected_count: int) -> List[str]:
         """Download and parse batch results."""
         # Download file
         result_file_response = self.client.files.content(output_file_id)
         result_content = result_file_response.content.decode('utf-8')
+
+        # save result to jsonl
+        self._save_batch_results_to_jsonl(batch_id, result_content)
         
         # Parse results
         results = [""] * expected_count
@@ -263,15 +270,23 @@ class OpenAIClient:
         logger.info(f"Batch completed: {success_count}/{len(results)} successful")
         
         return results
+
+    def _save_batch_results_to_jsonl(self, batch_id: str, result_content: str):
+        output_jsonl_path = BATCH_OUTPUT_DIR / "jsonl" / f"{batch_id}.jsonl"
+        output_jsonl_path.parent.mkdir(parents=True, exist_ok=True)
+        with output_jsonl_path.open('w', encoding='utf-8') as f:
+            for line in result_content.strip().split('\n'):
+                f.write(json.dumps(json.loads(line), ensure_ascii=False) + '\n')
     
     def generate_with_retry(
         self,
         prompts: List[str],
         system_instruction: Optional[str] = None,
         use_batch: bool = True,
+        custom_ids: Optional[List[str]] = None,
         show_progress: bool = True,
         **kwargs
-    ) -> List[str]:
+    ) -> Tuple[Optional[str], List[str]]:
         """
         Generate completions with automatic retry and batch/sequential fallback.
         
@@ -283,13 +298,9 @@ class OpenAIClient:
             **kwargs: Additional parameters
             
         Returns:
-            List of generated texts
+            Tuple of batch ID (if used) and list of generated texts
         """
         if use_batch and len(prompts) > 1:
-            # Create custom IDs
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            custom_ids = [f"request-{timestamp}-{i}" for i in range(len(prompts))]
-            
             try:
                 return self.generate_batch(
                     prompts, 
@@ -324,4 +335,4 @@ class OpenAIClient:
                     else:
                         results.append("API_ERROR")
         
-        return results
+        return None, results

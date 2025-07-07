@@ -53,7 +53,7 @@ class StockMovementEvaluator:
     
     def get_gold_label(self, doc: Dict[str, Any]) -> str:
         """Extract gold label from document."""
-        return doc["choices"][doc["gold"]].lower()
+        return doc["answer"].lower()
     
     def evaluate_predictions(
         self, 
@@ -96,6 +96,9 @@ class StockMovementEvaluator:
         cm_labels = self.gold_labels
         if error_count > 0:
             cm_labels = self.gold_labels + [self.default]
+
+        # print(df['gold_label'])
+        # print(df['pred_label'])
         
         metrics['confusion_matrix'] = confusion_matrix(
             df['gold_label'], 
@@ -121,6 +124,7 @@ class BenchmarkRunner:
         self.config = config
         self.data_loader = DataLoader()
         self.evaluator = StockMovementEvaluator()
+        self.batch_id = None
         
         # Initialize model based on type
         model_type = config.get('model_type', 'gpt')
@@ -215,13 +219,15 @@ class BenchmarkRunner:
                 custom_id = f"request-{timestamp}-{i}-{row.get('id', i)}-{gold_labels[i]}"
                 custom_ids.append(custom_id)
             
-            generated_texts = self.model.generate_with_retry(
+            batch_id, generated_texts = self.model.generate_with_retry(
                 prompts,
                 system_instruction=self.config.get('system_instruction', DEFAULT_GPT_SYSTEM_INSTRUCTION),
                 use_batch=self.use_batch,
+                custom_ids=custom_ids,
                 temperature=self.config.get('temperature', 0.0),
                 max_tokens=self.config.get('max_tokens', 20)
             )
+            self.batch_id = batch_id  # Save batch ID for later use
         else:
             raise NotImplementedError("Only GPT models are currently supported")
         
@@ -236,14 +242,16 @@ class BenchmarkRunner:
         self._log_results(metrics)
         
         # Save detailed results if batch ID provided
-        if hasattr(self, 'batch_id') and self.batch_id:
-            self._save_batch_results(
+        if self.batch_id:
+            self._save_batch_results_to_csv(
                 self.batch_id,
                 custom_ids,
                 gold_labels,
                 predicted_labels,
                 generated_texts
             )
+        else:
+            logger.warning("No batch ID available, detailed results will not be saved.")
         
         return metrics
     
@@ -262,7 +270,7 @@ class BenchmarkRunner:
             logger.info(f"MCC: {metrics['mcc']:.3f}")
         
         # Confusion matrix
-        logger.info("\nConfusion Matrix:")
+        logger.info("Confusion Matrix:")
         cm = metrics['confusion_matrix']
         cm_df = pd.DataFrame(cm)
         
@@ -272,11 +280,12 @@ class BenchmarkRunner:
         
         cm_df.index = [f'true_{label}' for label in labels[:len(cm_df)]]
         cm_df.columns = [f'pred_{label}' for label in labels[:len(cm_df.columns)]]
-        
+
+        print('[Confusion Matrix]')
         print(cm_df)
         
         # Classification report
-        logger.info("\nClassification Report:")
+        logger.info("Classification Report:")
         report = metrics['classification_report']
         for label, scores in report.items():
             if isinstance(scores, dict):
@@ -284,7 +293,7 @@ class BenchmarkRunner:
                           f"recall={scores.get('recall', 0):.3f}, "
                           f"f1={scores.get('f1-score', 0):.3f}")
     
-    def _save_batch_results(
+    def _save_batch_results_to_csv(
         self,
         batch_id: str,
         custom_ids: List[str],
@@ -293,10 +302,10 @@ class BenchmarkRunner:
         generated_texts: List[str]
     ):
         """Save detailed batch results."""
-        output_dir = BATCH_OUTPUT_DIR / "csv"
-        output_dir.mkdir(parents=True, exist_ok=True)
+        output_csv_dir = BATCH_OUTPUT_DIR / "csv"
+        output_csv_dir.mkdir(parents=True, exist_ok=True)
         
-        output_path = output_dir / f"{batch_id}.csv"
+        output_csv_path = output_csv_dir / f"{batch_id}.csv"
         
         df = pd.DataFrame({
             'custom_id': custom_ids,
@@ -305,8 +314,8 @@ class BenchmarkRunner:
             'pred_text': generated_texts
         })
         
-        df.to_csv(output_path, index=False, encoding='utf-8-sig')
-        logger.info(f"Saved batch results to {output_path}")
+        df.to_csv(output_csv_path, index=False, encoding='utf-8-sig')
+        logger.info(f"Saved batch results to {output_csv_path}")
 
 
 def main():
