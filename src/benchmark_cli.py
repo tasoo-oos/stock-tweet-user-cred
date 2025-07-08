@@ -81,6 +81,25 @@ def check_batch(batch_id: str) -> None:
     if batch_id in BATCH_ID_MATCH.keys():
         batch_id = BATCH_ID_MATCH[batch_id]
 
+    if batch_id == 'recent':
+        # 가장 최근에 호출한 batch ID로 대체
+        logger.info('No batch ID provided, using the most recent batch ID.')
+        recent_batch = list_batch_id(1)[0]
+        batch_id = recent_batch.id
+        logger.info(f'Batch ID: {batch_id}')
+
+    try: int(batch_id)
+    except: pass
+    else:
+        if int(batch_id) < 0:
+            batch_job = list_batch_id(abs(int(batch_id)))[-1]
+            batch_id = batch_job.id
+            logger.info(f'Batch ID: {batch_id}')
+        else:
+            #error
+            logger.error('Invalid batch ID format. Please provide a valid batch ID or use "recent" or a negative integer.')
+            return
+
     output_jsonl_path = BATCH_OUTPUT_DIR / "jsonl" / f"{batch_id}.jsonl"
     output_csv_path = BATCH_OUTPUT_DIR / "csv" / f"{batch_id}.csv"
     
@@ -160,10 +179,7 @@ def list_batch_id(list_len: int) -> None:
     try:
         client = OpenAIClient()
         
-        if list_len:
-            batch_list = list(client.client.batches.list(limit=list_len))
-        else:
-            batch_list = list(client.client.batches.list())
+        batch_list = list(client.client.batches.list())
         
         if not batch_list:
             print('-' * 30)
@@ -172,11 +188,16 @@ def list_batch_id(list_len: int) -> None:
         else:
             print('-' * 30, '(1 is most recent)')
             for idx, batch in enumerate(batch_list, start=1):
+                if idx > list_len:
+                    break
                 try:
                     request_counts = batch.request_counts.total
                 except Exception:
                     request_counts = '?'
                 print(f'{idx}. {batch.id} ({request_counts} requests)')
             print('-' * 30)
+
+        return batch_list[:list_len]
+
     except Exception as e:
         logger.error(f"Error listing batches: {e}")

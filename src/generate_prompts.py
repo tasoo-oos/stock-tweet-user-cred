@@ -356,9 +356,7 @@ class GeneratePrompts():
 
                 # --- 예시 출력 --- (필요한 경우, 각 스플릿의 첫 번째 항목)
 
-                for query in self.query_types:
-                    print(f'\n--- Example(first entry) of {query}_query for {split_name}-split')
-                    print()
+            self.show_example_queries('from-file', number_of_examples=1)
 
             print('non_exist:', self.count_non_exist)
             print('exist:', self.count_exist)

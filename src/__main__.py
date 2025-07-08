@@ -123,6 +123,8 @@ Examples:
     )
     bench_parser.add_argument(
         "--check-batch",
+        nargs="?",
+        const="recent",
         type=str,
         help="Check status of existing batch ID"
     )
