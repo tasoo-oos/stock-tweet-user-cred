@@ -39,11 +39,12 @@ def main():
 Examples:
   python -m src extract-sentiment --input dataset/tweets.csv
   python -m src user-credibility --analyze
-  python -m src benchmark --scenario gpt-batch-sample --num-samples 100
+  python -m src benchmark --scenario gpt-batch-sample --num-samples 100 --query-type basic_query
   python -m src parse --input raw_tweets.json --output parsed_tweets.csv
   python -m src query --input tweets.csv --model gpt-4.1-mini-2025-04-14
-  python -m src stats ~
-  python -m src generate-prompts ~
+  python -m src stats --inputs non_neutral batch_685ce8241c648190bf57f433f69ac8a4
+  python -m src generate-prompts --dataset flare-acl --split train --example
+  python -m src tools --find-batch-req batch_685ce8241c648190bf57f433f69ac8a4
         """
     )
     
@@ -213,6 +214,7 @@ Examples:
         help="Statistical test to perform (default: mcnemar)"
     )
 
+    # Generate Prompts Command
     prompts_parse = subparsers.add_parser(
         "generate-prompts",
         help="Generate prompts for benchmark experiments"
@@ -230,6 +232,34 @@ Examples:
         choices=["all", "train", "test", "valid"],
         default="all",
         help="Configuration"
+    )
+    prompts_parse.add_argument(
+        "--example",
+        action="store_true",
+        help="Generate example prompts for the dataset"
+    )
+    prompts_parse.add_argument(
+        "--num-examples",
+        type=int,
+        default=1,
+        help="Number of example prompts to generate (default: 1)"
+    )
+    prompts_parse.add_argument(
+        "--example-type",
+        type=str,
+        choices=["from-code", "from-file"],
+        default="from-code",
+        help="Type of example to generate (choices: [from-code, from-file]) (default: from-code)"
+    )
+
+    tools_parse = subparsers.add_parser(
+        "tools",
+        help="Utility tools for batch management and analysis"
+    )
+    tools_parse.add_argument(
+        "--find-batch-req",
+        type=str,
+        help="Find batch ID for a specific requirement (e.g., batch_685ce8241c648190bf57f433f69ac8a4)"
     )
 
     args = parser.parse_args()
@@ -314,8 +344,20 @@ Examples:
         elif args.command == "generate-prompts":
             logger.info(f"dataset: {args.dataset} / split: {args.split}")
             generator = GeneratePrompts(args.dataset, args.split)
-            result = generator.process_and_save()
+            if args.example:
+                generator.show_example_queries(args.example_type, args.num_examples)
+            else:
+                generator.process_and_save()
             logger.info("Completed successfully")
+
+        elif args.command == "tools":
+            if args.find_batch_req:
+                batch_id = args.find_batch_req
+
+                openai_client = OpenAIClient()
+                openai_client.find_batch_req_file(batch_id)
+
+                logger.info(f"Batch request file for {batch_id} found successfully")
 
         else:
             logger.error(f"Unknown command: {args.command}")

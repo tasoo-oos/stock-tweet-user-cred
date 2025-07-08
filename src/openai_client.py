@@ -20,6 +20,7 @@ from .constants import (
     BATCH_API_MAX_RETRIES,
     BATCH_API_SLEEP_TIME,
     BATCH_OUTPUT_DIR,
+    BATCH_REQUEST_TEMP_SAVE_PATH,
 )
 from .utils import setup_logging
 
@@ -156,6 +157,10 @@ class OpenAIClient:
             for request in batch_requests:
                 f.write(json.dumps(request) + '\n')
             batch_file_path = f.name
+
+        with BATCH_REQUEST_TEMP_SAVE_PATH.open('w', encoding='utf-8') as temp_file:
+            for request in batch_requests:
+                temp_file.write(json.dumps(request, ensure_ascii=False) + '\n')
         
         try:
             # Upload file
@@ -336,3 +341,21 @@ class OpenAIClient:
                         results.append("API_ERROR")
         
         return None, results
+
+    def find_batch_req_file(self, batch_id: str, show_sample: int = 1):
+        batch_job = self.client.batches.retrieve(batch_id)
+        batcj_job_file_id = batch_job.input_file_id
+        batch_file_content = self.client.files.content(batcj_job_file_id)
+        batch_file_content = batch_file_content.content.decode('utf-8')
+
+        json_list = []
+        for line in batch_file_content.strip().split('\n'):
+            if line.strip():
+                json_list.append(json.loads(line))
+
+        if show_sample > 0:
+            logger.info(f"Sample of {show_sample} batch requests:")
+            for i, req in enumerate(json_list[:show_sample]):
+                logger.info(f"Request {i}: {json.dumps(req, indent=2)}")
+
+        return json_list

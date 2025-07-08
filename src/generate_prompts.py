@@ -1,5 +1,5 @@
 """
-
+Generate prompts for the FLARE dataset based on user queries and tweets.
 """
 import pandas as pd
 import re
@@ -10,6 +10,7 @@ from .constants import (
     FLARE_DATASET_URL_PREFIX,
     FLARE_EDITED_PREFIX,
     TICKER_PATTERN,
+    DATE_PATTERN,
     USER_PATTERN,
     URL_PATTERN,
     ACL18_TWEET_DATA_DIR,
@@ -17,6 +18,9 @@ from .constants import (
     ANSWER_SUFFIX,
     OUTPUT_TABLE_USER_STOCK_PATH,
     CUSTOM_BENCHMARK_DIR,
+    BATCH_ID_MATCH,
+    QUERY_INSTRUCTION,
+    COLUMN_INFO,
 )
 
 class GeneratePrompts():
@@ -27,22 +31,11 @@ class GeneratePrompts():
         self.SAVE_FILE_PREFIX = FLARE_EDITED_PREFIX
         self.SAVE_FILE_TYPE = 'parquet' # 'csv' or 'parquet'
 
-        self.processed_queries_dic = {
-            'basic': [],  # flare 원본 데이터셋 조금 수정 -> 모든 트윗 포함 + 형식 약간 바꿈
-            'non_neutral': [],  # basic에서 neutral인 트윗만 제거
-            'exclude_low': [],  # non_neutral + 임계값 이하의 신뢰도를 가진 유저를 제거
-            'include_cred': [],  # exclude_low + 유저 신뢰도를 프롬프트에 추가
-
-            'exclude_low+0.5s': [],  # exclude_low에서 threshold를 평균+0.5표준편차로 설정 (상위 30%만 남김)
-            'exclude_low-0.5s': [],  # exclude_low에서 threshold를 평균-0.5표준편차로 설정 (상위 70%만 남김)
-
-            'non_tweets': []  # 트윗 없이 주가 변동만 넣었을 때의 결과 (트위터 정보가 유의미한지 파악)
-        }
-        self.query_types = list(self.processed_queries_dic.keys())
+        self.query_types = list(BATCH_ID_MATCH.keys())
 
         if dataset == 'flare-acl':
             if split == 'all':
-                self.flare_splits = FLARE_DATASET_SPLITS.keys()
+                self.flare_splits = list(FLARE_DATASET_SPLITS.keys())
             else:
                 self.flare_splits = [split]
 
@@ -94,6 +87,7 @@ class GeneratePrompts():
         non_neutral_df = self.sentiment_full_df[self.sentiment_full_df['Sentiment'] != 'neutral']
         self.user_cred_df = non_neutral_df.groupby('user_id').apply(self.process_user_accuracy)
         self.user_cred_df['con_acc_log1p'] = np.log1p(self.user_cred_df['continuous_accuracy'])
+        # self.user_cred_df['pred_count'] = non_neutral_df.groupby('user_id').size()
 
     def extract_query_parts(self, query_text: str) -> tuple[str, str, str]:  # ticker가 None일 수 없으므로 타입 힌트 변경
         """
@@ -219,22 +213,64 @@ class GeneratePrompts():
         if instruction_type == 'default':
             return prefix
 
-    def process_single_query(self, query_text: str):
-        """단일 쿼리를 처리하여 n 가지 버전의 새로운 쿼리 문자열을 생성합니다."""
+        ticker_match = re.search(TICKER_PATTERN, prefix)
+        date_match = re.search(DATE_PATTERN, prefix)
+        ticker = ticker_match.group(0)[1:] # $ 제외
+        date = date_match.group(0)
+
+        if instruction_type == 'basic':
+            """
+            Query_instruction을 하나로 고정 (10개 중 제일 성능이 좋은 'Analyze ~' 사용)
+            """
+            query_instruction = QUERY_INSTRUCTION.format(ticker=ticker, date=date)
+            spliter = '\nContext: '
+            price_table = prefix.split(spliter)[1]
+            return query_instruction + spliter + price_table
+
+        if instruction_type == 'with_column_info':
+            query_instruction = QUERY_INSTRUCTION.format(ticker=ticker, date=date)
+            spliter = '\nContext: '
+            price_table = prefix.split(spliter)[1]
+            return query_instruction + f'\n\n{COLUMN_INFO}\n' + spliter + price_table
+
+    def process_single_query(self, query_text: str) -> dict:
+        """
+        단일 쿼리를 처리하여 n 가지 버전의 새로운 쿼리 문자열을 생성합니다.
+
+        Input:
+        - query_text: str, 원본 쿼리 문자열 (예: "Query for $AAPL on 2023-01-01")
+
+        Output:
+        - query_results_dic: dict, 각 쿼리 타입에 대한 처리된 쿼리 문자열을 포함하는 딕셔너리
+          {
+              'basic': '...',
+              'non_neutral': '...',
+              'exclude_low': '...',
+              'include_cred': '...',
+              'exclude_low+0.5s': '...',
+              'exclude_low-0.5s': '...'
+          }
+
+        """
+
+        # --- 기존 쿼리에서 필요한 정보 추출 ---
 
         # ticker나 prefix 추출 안되는 경우는 없다고 가정
+        #
         ticker, prefix, following_text = self.extract_query_parts(query_text)
-
-        # 'default'면 prefix를 그대로 사용
-        new_prefix = self.make_prefix(prefix, 'default')
-
-        query_list_dic = {}
-        for query in self.query_types:
-            query_list_dic[query] = [new_prefix, ""]  # prefix와 빈 줄로 시작 (나중에 \n\n으로 join)
 
         matched_dates_with_format = re.findall(DATE_IN_FOLLOWING_PATTERN, '\n' + following_text)
         dates_to_process = [d.strip('\n :') for d in
                             matched_dates_with_format]  # 날짜 부분만 추출 (예: '\n2015-12-17: ' -> '2015-12-17') # 원래 코드: dt=dt[1:-2]
+
+        # --- 쿼리 문자열 생성 단계 ---
+
+        # 'default'면 prefix를 그대로 사용
+        new_prefix = self.make_prefix(prefix, 'basic')
+
+        query_list_dic = {}
+        for query in self.query_types:
+            query_list_dic[query] = [new_prefix, ""]  # prefix와 빈 줄로 시작 (나중에 \n\n으로 join)
 
         for date_str in dates_to_process:
             # 해당 날짜의 트윗 내용 생성
@@ -326,3 +362,53 @@ class GeneratePrompts():
 
             print('non_exist:', self.count_non_exist)
             print('exist:', self.count_exist)
+
+    def show_example_queries(self, example_type, number_of_examples=1):
+        """각 쿼리 타입에 대한 예시 출력"""
+        if example_type == 'from-code':
+            if self.dataset == 'flare-acl':
+                processed_queries_df = pd.DataFrame(columns=self.query_types)
+
+                # 데이터셋 로드
+                flare_df = self.load_flare_dataframe(self.flare_splits[0]) # split 중에 하나만 선택
+                if flare_df.empty:
+                    print("No data available to show examples.")
+                    return
+
+                # 첫번째 쿼리 추출 -> 쿼리 처리
+                sample_query_texts = flare_df['query'].iloc[:number_of_examples]
+                for idx, one_query_text in enumerate(sample_query_texts):
+                    processed_queries_df.loc[idx] = self.process_single_query(one_query_text)
+            else:
+                print("Example queries are not available for this dataset.")
+                return
+        elif example_type == 'from-file':
+            # 파일에서 예시 쿼리 로드
+            file_path = CUSTOM_BENCHMARK_DIR / f"{self.SAVE_FILE_PREFIX}acl_train.{self.SAVE_FILE_TYPE}"
+            if self.SAVE_FILE_TYPE == 'csv':
+                processed_queries_df = pd.read_csv(file_path).iloc[:number_of_examples]
+            elif self.SAVE_FILE_TYPE == 'parquet':
+                processed_queries_df = pd.read_parquet(file_path).iloc[:number_of_examples]
+            else:
+                raise ValueError(f"Unsupported file type: {self.SAVE_FILE_TYPE}")
+
+            column_change = {}
+            for query_type in self.query_types:
+                column_change[query_type + '_query'] = query_type
+            processed_queries_df.rename(columns=column_change, inplace=True)
+
+        for query_type in self.query_types:
+            print(f"\n========== Example of \"{query_type}\" query ==========")
+            for idx, query in enumerate(processed_queries_df[query_type]):
+                print(f'[{idx}]')
+                print(query)
+                print('\n')
+
+
+if __name__ == "__main__":
+    # 예시 실행
+    generator = GeneratePrompts(dataset='flare-acl', split='all')
+    generator.show_example_queries()
+    # 다른 split이나 dataset을 원하면, 인스턴스를 새로 생성하여 호출
+    # generator = GeneratePrompts(dataset='flare-acl', split='acl_test')
+    # generator.process_and_save()

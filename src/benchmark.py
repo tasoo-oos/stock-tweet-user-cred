@@ -36,9 +36,11 @@ class StockMovementEvaluator:
         self.default = STOCK_MOVEMENT_DEFAULT
         self.gold_label_classes = STOCK_MOVEMENT_LABELS
 
-    def create_prompt(self, doc: Dict[str, Any], query_column: str = "query") -> str:
+    def create_prompt(self, doc: Dict[str, Any], query_column) -> str:
         """Create prompt from document."""
-        return doc.get(query_column, doc.get("query", ""))
+        if query_column not in doc:
+            raise ValueError(f"Query column '{query_column}' not found in document. !!!!!!!!!")
+        return doc.get(query_column)
 
     def process_single_result(self, generated_text: str) -> str:
         """Convert model output to normalized label."""
