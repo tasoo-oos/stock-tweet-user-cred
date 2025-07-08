@@ -34,71 +34,78 @@ class StockMovementEvaluator:
     def __init__(self):
         self.choice_mapping = STOCK_MOVEMENT_CHOICE_MAPPING
         self.default = STOCK_MOVEMENT_DEFAULT
-        self.gold_labels = STOCK_MOVEMENT_LABELS
-    
+        self.gold_label_classes = STOCK_MOVEMENT_LABELS
+
     def create_prompt(self, doc: Dict[str, Any], query_column: str = "query") -> str:
         """Create prompt from document."""
         return doc.get(query_column, doc.get("query", ""))
-    
+
     def process_single_result(self, generated_text: str) -> str:
         """Convert model output to normalized label."""
         text = generated_text.lower().strip()
-        
+
         if "rise" in text or any(val in text for val in self.choice_mapping["rise"]):
             return "rise"
         if "fall" in text or any(val in text for val in self.choice_mapping["fall"]):
             return "fall"
-        
+
         return self.default
-    
+
     def get_gold_label(self, doc: Dict[str, Any]) -> str:
         """Extract gold label from document."""
         return doc["answer"].lower()
-    
+
     def evaluate_predictions(
-        self, 
-        gold_labels: List[str], 
+        self,
+        gold_labels: List[str],
         predicted_labels: List[str]
     ) -> Dict[str, Any]:
         """
         Calculate evaluation metrics.
-        
+
         Returns:
             Dictionary with various metrics
         """
+
         # Create DataFrame for analysis
         df = pd.DataFrame({
             'gold_label': gold_labels,
             'pred_label': predicted_labels
         })
-        
+
         # Count errors
-        error_count = sum(1 for label in predicted_labels if label == self.default)
-        
+        error_count, error_count_when_rise, error_count_when_fall = 0, 0, 0
+        for pred_label, gold_label in zip(predicted_labels, gold_labels):
+            if pred_label not in self.gold_label_classes:
+                error_count += 1
+                if gold_label == 'fall':
+                    error_count_when_fall += 1
+                elif gold_label == 'rise':
+                    error_count_when_rise += 1
+
         # Calculate metrics
         metrics = {
             'total_samples': len(gold_labels),
             'error_count': error_count,
+            'error_count_when_rise': error_count_when_rise,
+            'error_count_when_fall': error_count_when_fall,
             'error_rate': error_count / len(gold_labels) if gold_labels else 0
         }
-        
+
         # Metrics excluding errors
-        valid_mask = df['pred_label'] != self.default
+        valid_mask = df['pred_label'].isin(self.gold_label_classes)
         if valid_mask.sum() > 0:
             valid_gold = df.loc[valid_mask, 'gold_label']
             valid_pred = df.loc[valid_mask, 'pred_label']
-            
+
             metrics['accuracy'] = accuracy_score(valid_gold, valid_pred)
             metrics['f1_macro'] = f1_score(valid_gold, valid_pred, average='macro')
             metrics['mcc'] = matthews_corrcoef(valid_gold, valid_pred)
-        
-        # Confusion matrix
-        cm_labels = self.gold_labels
-        if error_count > 0:
-            cm_labels = self.gold_labels + [self.default]
 
-        # print(df['gold_label'])
-        # print(df['pred_label'])
+        # Confusion matrix
+        cm_labels = self.gold_label_classes
+        if error_count > 0:
+            cm_labels = self.gold_label_classes + [self.default]
         
         metrics['confusion_matrix'] = confusion_matrix(
             df['gold_label'], 
@@ -274,12 +281,23 @@ class BenchmarkRunner:
         cm = metrics['confusion_matrix']
         cm_df = pd.DataFrame(cm)
         
-        labels = self.evaluator.gold_labels
+        labels = self.evaluator.gold_label_classes
         if metrics['error_count'] > 0:
             labels = labels + [self.evaluator.default]
         
         cm_df.index = [f'true_{label}' for label in labels[:len(cm_df)]]
         cm_df.columns = [f'pred_{label}' for label in labels[:len(cm_df.columns)]]
+
+        # Counfusion Matrix에 error column 추가
+        if metrics['error_count'] > 0:
+            pred_error = []
+            for label in self.evaluator.gold_label_classes: # 순서 일치시키기 위함
+                pred_error.append(metrics['error_count_when'+label])
+            cm_df['pred_error'] = pred_error
+
+        # Sum rows and columns 추가
+        cm_df['| sum'] = cm_df.sum(axis=1)
+        cm_df.loc['-- sum --'] = cm_df.sum(axis=0)
 
         print('[Confusion Matrix]')
         print(cm_df)

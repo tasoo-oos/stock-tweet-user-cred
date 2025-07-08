@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Dict, Any
 
 from .openai_client import OpenAIClient
-from .benchmark import StockMovementEvaluator
+from .benchmark import StockMovementEvaluator, BenchmarkRunner
 from .constants import (
     DEFAULT_GPT_MODEL,
     DEFAULT_GPT_SYSTEM_INSTRUCTION,
@@ -145,10 +145,14 @@ def check_batch(batch_id: str) -> None:
         df.to_csv(output_csv_path, index=False, encoding='utf-8-sig')
         
         # Show metrics
+        logger.info("Calculating metrics...")
         gold_labels = df['gold_label'].tolist()
         pred_labels = df['pred_label'].tolist()
         metrics = evaluator.evaluate_predictions(gold_labels, pred_labels)
-        logger.info(f"Accuracy: {metrics.get('accuracy', 0):.3f}")
+
+        # BenchmarkRunner 클래스에서 _log_results 메서드 사용 (init에 필요한 config는 아무 값 사용)
+        benchmark_runner = BenchmarkRunner(get_default_configs()['gpt-batch-full'])
+        benchmark_runner._log_results(metrics)
 
 
 def list_batch_id(list_len: int) -> None:
