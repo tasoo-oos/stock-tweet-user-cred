@@ -262,7 +262,10 @@ Examples:
                     with open(args.config, 'r') as f:
                         config = json.load(f)
                 else:
-                    config = get_default_configs()["gpt-batch-sample"]
+                    if args.num_samples > 0:
+                        config = get_default_configs()["gpt-batch-sample"]
+                    else:
+                        config = get_default_configs()["gpt-batch-full"]
                 
                 runner = BenchmarkRunner(config)
                 results = runner.run_evaluation(args.num_samples, args.query_type)
