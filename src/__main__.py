@@ -186,7 +186,7 @@ Examples:
         "--max-tokens",
         type=int,
         default=200,
-        help="Maximum tokens for response (default: 200)"
+        help="Maximum tokens for response (default: 500)"
     )
     query_parser.add_argument(
         "--temperature",

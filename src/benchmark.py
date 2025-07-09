@@ -243,7 +243,7 @@ class BenchmarkRunner:
                 use_batch=self.use_batch,
                 custom_ids=custom_ids,
                 temperature=self.config.get('temperature', 0.0),
-                max_tokens=self.config.get('max_tokens', 20)
+                max_tokens=self.config.get('max_tokens', 500)
             )
             self.batch_id = batch_id  # Save batch ID for later use
         else:
