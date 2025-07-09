@@ -113,24 +113,20 @@ class StockMovementEvaluator:
             metrics['f1_macro'] = f1_score(valid_gold, valid_pred, average='macro')
             metrics['mcc'] = matthews_corrcoef(valid_gold, valid_pred)
 
-        # Confusion matrix
-        cm_labels = self.gold_label_classes
-        if error_count > 0:
-            cm_labels = self.gold_label_classes + [self.default]
-        
-        metrics['confusion_matrix'] = confusion_matrix(
-            df['gold_label'], 
-            df['pred_label'], 
-            labels=cm_labels
-        )
-        
-        # Classification report
-        metrics['classification_report'] = classification_report(
-            df['gold_label'], 
-            df['pred_label'],
-            zero_division=0,
-            output_dict=True
-        )
+            # Confusion matrix
+            metrics['confusion_matrix'] = confusion_matrix(
+                df['gold_label'],
+                df['pred_label'],
+                labels=self.gold_label_classes
+            )
+
+            # Classification report
+            metrics['classification_report'] = classification_report(
+                valid_gold,
+                valid_pred,
+                zero_division=0,
+                output_dict=True
+            )
         
         return metrics
 
