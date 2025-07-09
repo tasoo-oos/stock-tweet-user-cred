@@ -319,6 +319,7 @@ class OpenAIClient:
                 )
             except Exception as e:
                 logger.warning(f"Batch API failed, falling back to sequential: {e}")
+                raise
         
         # Sequential generation with retry (미완성)
         results = []
