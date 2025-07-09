@@ -89,5 +89,5 @@ COLUMN_INFO = """
 # low        : lowest intraday change (%)
 # close      : closing price change (%)
 # adj-close  : adjusted close (%)
-# inc-5~30   : % change compared to N days ago
+# inc-5~30   : % change compared to N trading days ago
 """.strip()

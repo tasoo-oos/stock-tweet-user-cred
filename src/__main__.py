@@ -263,6 +263,17 @@ Examples:
         type=str,
         help="Find batch ID for a specific requirement (e.g., batch_685ce8241c648190bf57f433f69ac8a4)"
     )
+    tools_parse.add_argument(
+        "--num",
+        type=int,
+        default=0,
+        help= "Generic numeric argument for various tools (default: 0)"
+    )
+    tools_parse.add_argument(
+        '--price',
+        type=str,
+        help="Calculate total price for a specific batch ID (e.g., batch_685ce8241c648190bf57f433f69ac8a4)"
+    )
 
     args = parser.parse_args()
     
@@ -286,7 +297,7 @@ Examples:
                 
             elif args.list_batches is not None:
                 list_batch_id(args.list_batches)
-                
+
             else:
                 if args.scenario:
                     config = get_default_configs()[args.scenario]
@@ -357,9 +368,16 @@ Examples:
                 batch_id = args.find_batch_req
 
                 openai_client = OpenAIClient()
-                openai_client.find_batch_req_file(batch_id)
+                openai_client.find_batch_req_file(batch_id, args.num)
 
                 logger.info(f"Batch request file for {batch_id} found successfully")
+            if args.price:
+                batch_id = args.price
+
+                openai_client = OpenAIClient()
+                total_price = openai_client.calculate_price(batch_id)
+
+                logger.info(f"Total price for batch {batch_id}: ${total_price:.4f}")
 
         else:
             logger.error(f"Unknown command: {args.command}")

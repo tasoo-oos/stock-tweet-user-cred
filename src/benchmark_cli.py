@@ -36,14 +36,14 @@ def get_default_configs() -> Dict[str, Dict[str, Any]]:
         "dataset_split": "train",
         "use_batch_api": True,
         "batch_check_interval": 15,
-        "max_batch_wait_time": 7200,
-        "max_tokens": 500,
+        "max_batch_wait_time": 14400,
+        "max_tokens": 20,
         "temperature": 0.0
     }
     
     gpt_batch_full_config = gpt_batch_base_config.copy()
     gpt_batch_sample_config = gpt_batch_base_config.copy()
-    gpt_batch_sample_config["max_batch_wait_time"] = 600
+    gpt_batch_sample_config["max_batch_wait_time"] = 14400
     
     gpt_batch_flare_original_config = {
         "experiment_name": "GPT 3.5 Turbo on Stock Movement (ACL18)",
@@ -54,7 +54,7 @@ def get_default_configs() -> Dict[str, Dict[str, Any]]:
         "dataset_split": "acl_test",
         "use_batch_api": True,
         "batch_check_interval": 10,
-        "max_batch_wait_time": 3600
+        "max_batch_wait_time": 14400
     }
     
     finma_batch_config = {

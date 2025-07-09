@@ -21,6 +21,7 @@ from .constants import (
     BATCH_ID_MATCH,
     QUERY_INSTRUCTION,
     COLUMN_INFO,
+    PREFIX_FOR_TWEET_LIST,
 )
 
 class GeneratePrompts():
@@ -256,7 +257,7 @@ class GeneratePrompts():
         # --- 기존 쿼리에서 필요한 정보 추출 ---
 
         # ticker나 prefix 추출 안되는 경우는 없다고 가정
-        #
+        # prefix: 'Query instruction + Price Table' / following_text: 'Tweet List'
         ticker, prefix, following_text = self.extract_query_parts(query_text)
 
         matched_dates_with_format = re.findall(DATE_IN_FOLLOWING_PATTERN, '\n' + following_text)
@@ -270,7 +271,12 @@ class GeneratePrompts():
 
         query_list_dic = {}
         for query in self.query_types:
-            query_list_dic[query] = [new_prefix, ""]  # prefix와 빈 줄로 시작 (나중에 \n\n으로 join)
+            if '{date' in  PREFIX_FOR_TWEET_LIST:
+                matched_dates_from_table = re.findall(DATE_PATTERN, prefix.split('Context:')[-1])
+                prefix_for_tweet_list = PREFIX_FOR_TWEET_LIST.format(date1=matched_dates_from_table[0], date2=matched_dates_from_table[-1])
+            else:
+                prefix_for_tweet_list = PREFIX_FOR_TWEET_LIST
+            query_list_dic[query] = [new_prefix, prefix_for_tweet_list]  # prefix와 빈 줄(or PREFIX_FOR_TWEET_LIST)로 시작 (나중에 \n\n으로 join)
 
         for date_str in dates_to_process:
             # 해당 날짜의 트윗 내용 생성

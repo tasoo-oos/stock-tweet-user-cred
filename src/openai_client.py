@@ -11,6 +11,7 @@ from datetime import datetime
 
 import openai
 import numpy as np
+import pandas as pd
 from tqdm import tqdm
 
 from .constants import (
@@ -346,6 +347,9 @@ class OpenAIClient:
         return None, results, []
 
     def find_batch_req_file(self, batch_id: str, show_sample: int = 1):
+        if show_sample == 0: # 기본값 처리
+            show_sample = 1
+
         batch_job = self.client.batches.retrieve(batch_id)
         batcj_job_file_id = batch_job.input_file_id
         batch_file_content = self.client.files.content(batcj_job_file_id)
@@ -362,3 +366,29 @@ class OpenAIClient:
                 logger.info(f"Request {i}: {json.dumps(req, indent=2)}")
 
         return json_list
+
+    def calculate_price(self, batch_id: str, input_price: float = 0.2, output_price: float = 0.8) -> float:
+        """
+        실행 완료된 배치 파일의 결과(파일로 저장되어 있어야 함)를 바탕으로, 가격을 계산함
+
+        가정:
+        - model: gpt-4.1-mini-2025-04-14 -> input: 0.2 / output: 0.8
+        - input_price: 1M tokens당 가격(달러) (기본값: 0.2)
+        - output_price: 1M tokens당 가격(달러) (기본값: 0.8)
+        """
+        d = {'prompt': [], 'compl': []}
+
+        with open(f'cache/batch_benchmark_result/jsonl/{batch_id}.jsonl', 'r') as f:
+            for line in f:
+                line = line.strip()
+                if line:
+                    js = json.loads(line)
+                    d['prompt'].append(js['response']['body']['usage']['prompt_tokens'])
+                    d['compl'].append(js['response']['body']['usage']['completion_tokens'])
+
+        df = pd.DataFrame(d)
+        df['price'] = (df['prompt'] * 0.2) + (df['compl'] * 0.8)
+
+        total_price = df['price'].sum() / 1_000_000
+
+        return total_price
