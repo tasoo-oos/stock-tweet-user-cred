@@ -37,7 +37,7 @@ def get_default_configs() -> Dict[str, Dict[str, Any]]:
         "use_batch_api": True,
         "batch_check_interval": 15,
         "max_batch_wait_time": 7200,
-        "max_tokens": 20,
+        "max_tokens": 500,
         "temperature": 0.0
     }
     
