@@ -69,9 +69,9 @@ DEFAULT_GPT_SYSTEM_INSTRUCTION = DEFAULT_GPT_SYSTEM_INSTRUCTION_COT_version1
 QUERY_INSTRUCTION = QUERY_INSTRUCTION
 
 # Prompt configuration
-# PREFIX_FOR_TWEET_LIST = '' # 기본값
+PREFIX_FOR_TWEET_LIST = '' # 기본값
 # PREFIX_FOR_TWEET_LIST = '\nTweet List (Credible User):'
-PREFIX_FOR_TWEET_LIST = '\n# Tweet Window : {date1} ～ {date2} (14 calendar days)'
+# PREFIX_FOR_TWEET_LIST = '\n# Tweet Window : {date1} ～ {date2} (14 calendar days)'
 ANSWER_SUFFIX = '\nAnswer:'
 
 # Batch API configuration
