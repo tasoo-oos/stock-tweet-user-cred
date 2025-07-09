@@ -44,7 +44,16 @@ class StockMovementEvaluator:
 
     def process_single_result(self, generated_text: str) -> str:
         """Convert model output to normalized label."""
-        text = generated_text.lower().strip()
+
+        try:
+            json_data = json.loads(generated_text.strip())
+        except json.JSONDecodeError:
+            text = generated_text.lower().strip()
+        else:
+            for key in json_data:
+                if "answer" in key.lower():
+                    text = json_data[key].lower().strip()
+                    break
 
         if "rise" in text or any(val in text for val in self.choice_mapping["rise"]):
             return "rise"
@@ -228,7 +237,7 @@ class BenchmarkRunner:
                 custom_id = f"request-{timestamp}-{i}-{row.get('id', i)}-{gold_labels[i]}"
                 custom_ids.append(custom_id)
             
-            batch_id, generated_texts = self.model.generate_with_retry(
+            batch_id, generated_texts, original_results = self.model.generate_with_retry(
                 prompts,
                 system_instruction=self.config.get('system_instruction', DEFAULT_GPT_SYSTEM_INSTRUCTION),
                 use_batch=self.use_batch,
@@ -242,6 +251,7 @@ class BenchmarkRunner:
         
         # Process predictions
         predicted_labels = [self.evaluator.process_single_result(text) for text in generated_texts]
+        resonings = [result.get('reasoning', '') for result in original_results] if original_results else None
         
         # Evaluate
         logger.info("Calculating metrics...")
@@ -257,7 +267,8 @@ class BenchmarkRunner:
                 custom_ids,
                 gold_labels,
                 predicted_labels,
-                generated_texts
+                generated_texts,
+                resonings=resonings
             )
         else:
             logger.warning("No batch ID available, detailed results will not be saved.")
@@ -294,7 +305,7 @@ class BenchmarkRunner:
         if metrics['error_count'] > 0:
             pred_error = []
             for label in self.evaluator.gold_label_classes: # 순서 일치시키기 위함
-                pred_error.append(metrics['error_count_when'+label])
+                pred_error.append(metrics['error_count_when_'+label])
             cm_df['pred_error'] = pred_error
 
         # Sum rows and columns 추가
@@ -319,7 +330,8 @@ class BenchmarkRunner:
         custom_ids: List[str],
         gold_labels: List[str],
         predicted_labels: List[str],
-        generated_texts: List[str]
+        generated_texts: List[str],
+        resonings: Optional[List[str]] = None
     ):
         """Save detailed batch results."""
         output_csv_dir = BATCH_OUTPUT_DIR / "csv"
@@ -333,6 +345,8 @@ class BenchmarkRunner:
             'pred_label': predicted_labels,
             'pred_text': generated_texts
         })
+        if resonings:
+            df['reasoning'] = resonings
         
         df.to_csv(output_csv_path, index=False, encoding='utf-8-sig')
         logger.info(f"Saved batch results to {output_csv_path}")

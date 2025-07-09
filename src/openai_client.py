@@ -111,7 +111,7 @@ class OpenAIClient:
         batch_check_interval: int = BATCH_CHECK_INTERVAL,
         max_wait_time: int = MAX_BATCH_WAIT_TIME,
         **kwargs
-    ) -> Tuple[str, List[str]]:
+    ) -> Tuple[str, List[str], List[Dict[str, Any]]]:
         """
         Generate completions using the Batch API.
         
@@ -191,9 +191,9 @@ class OpenAIClient:
             
             # Download and parse results
             logger.info("Downloading batch results...")
-            results = self._download_batch_results(batch_job.id, batch_job.output_file_id, len(prompts))
+            results, original_results = self._download_batch_results(batch_job.id, batch_job.output_file_id, len(prompts))
             
-            return batch_job.id, results
+            return batch_job.id, results, original_results
             
         finally:
             # Clean up temporary file
@@ -228,7 +228,7 @@ class OpenAIClient:
             
             time.sleep(check_interval)
     
-    def _download_batch_results(self, batch_id: str, output_file_id: str, expected_count: int) -> List[str]:
+    def _download_batch_results(self, batch_id: str, output_file_id: str, expected_count: int) -> Tuple[List[str], List[Dict[str, Any]]]:
         """Download and parse batch results."""
         # Download file
         result_file_response = self.client.files.content(output_file_id)
@@ -239,10 +239,13 @@ class OpenAIClient:
         
         # Parse results
         results = [""] * expected_count
+        original_results = []
         
         for line in result_content.strip().split('\n'):
             if line.strip():
                 result = json.loads(line)
+                original_results.append(result)
+
                 custom_id = result.get("custom_id", "")
                 
                 # Extract index from custom_id
@@ -274,7 +277,7 @@ class OpenAIClient:
         success_count = sum(1 for r in results if r != "BATCH_ERROR")
         logger.info(f"Batch completed: {success_count}/{len(results)} successful")
         
-        return results
+        return results, original_results
 
     def _save_batch_results_to_jsonl(self, batch_id: str, result_content: str):
         output_jsonl_path = BATCH_OUTPUT_DIR / "jsonl" / f"{batch_id}.jsonl"
@@ -291,7 +294,7 @@ class OpenAIClient:
         custom_ids: Optional[List[str]] = None,
         show_progress: bool = True,
         **kwargs
-    ) -> Tuple[Optional[str], List[str]]:
+    ) -> Tuple[Optional[str], List[str], List[Dict[str, Any]]]:
         """
         Generate completions with automatic retry and batch/sequential fallback.
         
@@ -316,7 +319,7 @@ class OpenAIClient:
             except Exception as e:
                 logger.warning(f"Batch API failed, falling back to sequential: {e}")
         
-        # Sequential generation with retry
+        # Sequential generation with retry (미완성)
         results = []
         iterator = tqdm(prompts, desc="Generating") if show_progress else prompts
         
@@ -340,7 +343,7 @@ class OpenAIClient:
                     else:
                         results.append("API_ERROR")
         
-        return None, results
+        return None, results, []
 
     def find_batch_req_file(self, batch_id: str, show_sample: int = 1):
         batch_job = self.client.batches.retrieve(batch_id)
