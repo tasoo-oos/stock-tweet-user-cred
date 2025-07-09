@@ -382,7 +382,7 @@ class GeneratePrompts():
                 return
         elif example_type == 'from-file':
             # 파일에서 예시 쿼리 로드
-            file_path = CUSTOM_BENCHMARK_DIR / f"{self.SAVE_FILE_PREFIX}acl_train.{self.SAVE_FILE_TYPE}"
+            file_path = CUSTOM_BENCHMARK_DIR / f"{self.SAVE_FILE_PREFIX}acl_test.{self.SAVE_FILE_TYPE}"
             if self.SAVE_FILE_TYPE == 'csv':
                 processed_queries_df = pd.read_csv(file_path).iloc[:number_of_examples]
             elif self.SAVE_FILE_TYPE == 'parquet':
