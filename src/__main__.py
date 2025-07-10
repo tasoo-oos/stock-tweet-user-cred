@@ -37,24 +37,84 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
+  python -m src query --input tweets.csv --model gpt-4.1-mini-2025-04-14
+  python -m src parse --input raw_tweets.json --output parsed_tweets.csv
   python -m src extract-sentiment --input dataset/tweets.csv
   python -m src user-credibility --analyze
-  python -m src benchmark --scenario gpt-batch-sample --num-samples 100 --query-type basic_query
-  python -m src parse --input raw_tweets.json --output parsed_tweets.csv
-  python -m src query --input tweets.csv --model gpt-4.1-mini-2025-04-14
-  python -m src stats --inputs non_neutral batch_685ce8241c648190bf57f433f69ac8a4
   python -m src generate-prompts --dataset flare-acl --split train --example
+  python -m src benchmark --scenario gpt-batch-sample --num-samples 100 --query-type basic_query
+  python -m src stats --inputs non_neutral batch_685ce8241c648190bf57f433f69ac8a4
   python -m src tools --find-batch-req batch_685ce8241c648190bf57f433f69ac8a4
         """
     )
-    
+
     subparsers = parser.add_subparsers(
-        dest="command", 
+        dest="command",
         title="Available Commands",
         help="Choose a command to run"
     )
-    
-    # Extract Sentiment Command
+
+
+    # ========== Query Command ==========
+    query_parser = subparsers.add_parser(
+        "query",
+        help="Analyze individual tweets with OpenAI"
+    )
+    query_parser.add_argument(
+        "--input",
+        type=str,
+        required=True,
+        help="Input CSV file with tweets"
+    )
+    query_parser.add_argument(
+        "--model",
+        type=str,
+        default=DEFAULT_GPT_MODEL,
+        help=f"OpenAI model to use (default: {DEFAULT_GPT_MODEL})"
+    )
+    query_parser.add_argument(
+        "--batch",
+        action="store_true",
+        help="Use batch API instead of real-time API"
+    )
+    query_parser.add_argument(
+        "--max-tokens",
+        type=int,
+        default=200,
+        help="Maximum tokens for response (default: 500)"
+    )
+    query_parser.add_argument(
+        "--temperature",
+        type=float,
+        default=0.0,
+        help="Temperature for generation (default: 0.0)"
+    )
+
+    # ========== Parse Command ==========
+    parse_parser = subparsers.add_parser(
+        "parse",
+        help="Parse raw Twitter data into flattened structure"
+    )
+    parse_parser.add_argument(
+        "--input",
+        type=str,
+        required=True,
+        help="Input JSON file path"
+    )
+    parse_parser.add_argument(
+        "--output",
+        type=str,
+        help="Output CSV file path"
+    )
+    parse_parser.add_argument(
+        "--format",
+        type=str,
+        choices=["csv", "parquet"],
+        default="csv",
+        help="Output format (default: csv)"
+    )
+
+    # ========== Extract Sentiment Command ==========
     extract_parser = subparsers.add_parser(
         "extract-sentiment",
         help="Extract sentiment from tweets and merge with stock price data"
@@ -70,7 +130,7 @@ Examples:
         help="Output file path (optional, uses default naming if not provided)"
     )
     
-    # User Credibility Command
+    # ========== User Credibility Command ==========
     cred_parser = subparsers.add_parser(
         "user-credibility",
         help="Analyze user credibility based on tweet sentiment and stock performance"
@@ -92,8 +152,47 @@ Examples:
         default=str(CACHE_DIR),
         help=f"Output file path for credibility results (default: {CACHE_DIR})"
     )
+
+
+    # ========== Generate Prompts Command =========
+    prompts_parse = subparsers.add_parser(
+        "generate-prompts",
+        help="Generate prompts for benchmark experiments"
+    )
+    prompts_parse.add_argument(
+        "--dataset",
+        type=str,
+        choices=["flare-acl", "kaggle-1"],
+        default="flare-acl",
+        help="Configuration"
+    )
+    prompts_parse.add_argument(
+        "--split",
+        type=str,
+        choices=["all", "train", "test", "valid"],
+        default="all",
+        help="Configuration"
+    )
+    prompts_parse.add_argument(
+        "--example",
+        action="store_true",
+        help="Generate example prompts for the dataset"
+    )
+    prompts_parse.add_argument(
+        "--num-examples",
+        type=int,
+        default=1,
+        help="Number of example prompts to generate (default: 1)"
+    )
+    prompts_parse.add_argument(
+        "--example-type",
+        type=str,
+        choices=["from-code", "from-file"],
+        default="from-code",
+        help="Type of example to generate (choices: [from-code, from-file]) (default: from-code)"
+    )
     
-    # Benchmark Command
+    # ========== Benchmark Command =========
     bench_parser = subparsers.add_parser(
         "benchmark",
         help="Run stock movement prediction benchmarks"
@@ -135,67 +234,9 @@ Examples:
         const=10,
         help="List recent batch IDs (default: 10, use 0 for all)"
     )
+
     
-    # Parse Command
-    parse_parser = subparsers.add_parser(
-        "parse",
-        help="Parse raw Twitter data into flattened structure"
-    )
-    parse_parser.add_argument(
-        "--input",
-        type=str,
-        required=True,
-        help="Input JSON file path"
-    )
-    parse_parser.add_argument(
-        "--output",
-        type=str,
-        help="Output CSV file path"
-    )
-    parse_parser.add_argument(
-        "--format",
-        type=str,
-        choices=["csv", "parquet"],
-        default="csv",
-        help="Output format (default: csv)"
-    )
-    
-    # Query Command
-    query_parser = subparsers.add_parser(
-        "query",
-        help="Analyze individual tweets with OpenAI"
-    )
-    query_parser.add_argument(
-        "--input",
-        type=str,
-        required=True,
-        help="Input CSV file with tweets"
-    )
-    query_parser.add_argument(
-        "--model",
-        type=str,
-        default=DEFAULT_GPT_MODEL,
-        help=f"OpenAI model to use (default: {DEFAULT_GPT_MODEL})"
-    )
-    query_parser.add_argument(
-        "--batch",
-        action="store_true",
-        help="Use batch API instead of real-time API"
-    )
-    query_parser.add_argument(
-        "--max-tokens",
-        type=int,
-        default=200,
-        help="Maximum tokens for response (default: 500)"
-    )
-    query_parser.add_argument(
-        "--temperature",
-        type=float,
-        default=0.0,
-        help="Temperature for generation (default: 0.0)"
-    )
-    
-    # Statistics Command
+    # ========== Statistics Command =========
     stats_parser = subparsers.add_parser(
         "stats",
         help="Run statistical analysis (p-value calculations)"
@@ -216,44 +257,8 @@ Examples:
         help="Statistical test to perform (default: mcnemar)"
     )
 
-    # Generate Prompts Command
-    prompts_parse = subparsers.add_parser(
-        "generate-prompts",
-        help="Generate prompts for benchmark experiments"
-    )
-    prompts_parse.add_argument(
-        "--dataset",
-        type=str,
-        choices=["flare-acl", "kaggle-1"],
-        default="flare-acl",
-        help="Configuration"
-    )
-    prompts_parse.add_argument(
-        "--split",
-        type=str,
-        choices=["all", "train", "test", "valid"],
-        default="all",
-        help="Configuration"
-    )
-    prompts_parse.add_argument(
-        "--example",
-        action="store_true",
-        help="Generate example prompts for the dataset"
-    )
-    prompts_parse.add_argument(
-        "--num-examples",
-        type=int,
-        default=1,
-        help="Number of example prompts to generate (default: 1)"
-    )
-    prompts_parse.add_argument(
-        "--example-type",
-        type=str,
-        choices=["from-code", "from-file"],
-        default="from-code",
-        help="Type of example to generate (choices: [from-code, from-file]) (default: from-code)"
-    )
 
+    # ========== Tools Command =========
     tools_parse = subparsers.add_parser(
         "tools",
         help="Utility tools for batch management and analysis"
@@ -275,6 +280,8 @@ Examples:
         help="Calculate total price for a specific batch ID (e.g., batch_685ce8241c648190bf57f433f69ac8a4)"
     )
 
+
+    # ========== Process command-line arguments ==========
     args = parser.parse_args()
     
     if not args.command:
@@ -282,7 +289,38 @@ Examples:
         sys.exit(1)
     
     try:
-        if args.command == "extract-sentiment":
+        if args.command == "query":
+            client = OpenAIClient(model=args.model)
+            loader = DataLoader()
+
+            logger.info(f"Loading tweets from {args.input}")
+            df = loader.load_csv(args.input)
+
+            if args.batch:
+                logger.info("Using batch API")
+                # TODO: Implement batch processing
+                logger.warning("Batch API functionality needs specific implementation")
+            else:
+                logger.info("Using real-time API")
+                # TODO: Implement single tweet processing
+                logger.warning("Single tweet processing needs specific implementation")
+
+        elif args.command == "parse":
+            loader = DataLoader()
+
+            # Determine output path
+            if args.output:
+                output_path = args.output
+            else:
+                input_path = Path(args.input)
+                output_path = str(input_path.with_suffix(f".{args.format}"))
+
+            # Parse the data
+            logger.info(f"Parsing {args.input} to {output_path}")
+            result = loader.parse_twitter_data(args.input, output_path, args.format)
+            logger.info("Parse completed successfully")
+
+        elif args.command == "extract-sentiment":
             result = extract_main()
             logger.info("Sentiment extraction completed successfully")
             
@@ -290,6 +328,15 @@ Examples:
             analyzer = UserCredibilityAnalyzer()
             results = analyzer.process_and_save(args.input)
             logger.info("User credibility analysis completed successfully")
+
+        elif args.command == "generate-prompts":
+            logger.info(f"dataset: {args.dataset} / split: {args.split}")
+            generator = GeneratePrompts(args.dataset, args.split)
+            if args.example:
+                generator.show_example_queries(args.example_type, args.num_examples)
+            else:
+                generator.process_and_save()
+            logger.info("Completed successfully")
             
         elif args.command == "benchmark":
             if args.check_batch:
@@ -313,37 +360,7 @@ Examples:
                 runner = BenchmarkRunner(config)
                 results = runner.run_evaluation(args.num_samples, args.query_type)
                 logger.info("Benchmark completed successfully")
-                
-        elif args.command == "parse":
-            loader = DataLoader()
-            
-            # Determine output path
-            if args.output:
-                output_path = args.output
-            else:
-                input_path = Path(args.input)
-                output_path = str(input_path.with_suffix(f".{args.format}"))
-            
-            # Parse the data
-            logger.info(f"Parsing {args.input} to {output_path}")
-            result = loader.parse_twitter_data(args.input, output_path, args.format)
-            logger.info("Parse completed successfully")
-            
-        elif args.command == "query":
-            client = OpenAIClient(model=args.model)
-            loader = DataLoader()
-            
-            logger.info(f"Loading tweets from {args.input}")
-            df = loader.load_csv(args.input)
-            
-            if args.batch:
-                logger.info("Using batch API")
-                # TODO: Implement batch processing
-                logger.warning("Batch API functionality needs specific implementation")
-            else:
-                logger.info("Using real-time API")
-                # TODO: Implement single tweet processing
-                logger.warning("Single tweet processing needs specific implementation")
+
                 
         elif args.command == "stats":
             logger.info(f"Running {args.test} test on inputs: {args.inputs}")
@@ -353,15 +370,6 @@ Examples:
                 test_func=args.test
             )
             logger.info("Statistical analysis completed successfully")
-
-        elif args.command == "generate-prompts":
-            logger.info(f"dataset: {args.dataset} / split: {args.split}")
-            generator = GeneratePrompts(args.dataset, args.split)
-            if args.example:
-                generator.show_example_queries(args.example_type, args.num_examples)
-            else:
-                generator.process_and_save()
-            logger.info("Completed successfully")
 
         elif args.command == "tools":
             if args.find_batch_req:
