@@ -38,7 +38,7 @@ class TweetsParser:
         Drop duplicate tweets based on user_id, text, and stock_ticker.
         """
         initial_shape = df.shape
-        df = df.drop_duplicates(['user_id', 'text', 'stock_ticker'])
+        df = df.drop_duplicates(['created_at', 'text', 'stock_ticker'])
         final_shape = df.shape
         logger.info(f"Dropped {initial_shape[0] - final_shape[0]} duplicate tweets.")
         return df
