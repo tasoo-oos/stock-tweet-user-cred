@@ -15,6 +15,10 @@ from src.constants import (
     KAGGLE1_COLUMN_INFO_PATH
 )
 from .utils import setup_logging
+import time
+import random
+
+random.seed(42)
 
 logger = setup_logging(__name__)
 
@@ -41,6 +45,31 @@ class TweetsParser:
         df = df.drop_duplicates(['created_at', 'text', 'stock_ticker'])
         final_shape = df.shape
         logger.info(f"Dropped {initial_shape[0] - final_shape[0]} duplicate tweets.")
+        return df
+
+    def _drop_old_tweets(self, df):
+        """
+        Drop tweets older than 2 years from the current date.
+        """
+        import datetime
+
+        # 2017년 12월 31일 23시 59분 기준으로 설정 (2018년부터의 데이터만 사용)
+        dt = datetime.datetime(2018, 12, 31, 23, 59, 0)
+
+        # 타임스탬프 변환 (로컬 시간 기준)
+        timestamp = int(dt.timestamp())
+
+        df = df[df['created_at'].astype(int) > timestamp]
+
+        logger.info(f"Dropped tweets older than {dt.strftime('%Y-%m-%d %H:%M:%S')}. Remaining tweets: {df.shape[0]}")
+
+        return df
+
+    def _random_sample_by_user(self, df, num_user):
+        _unique_users = df['user_id'].unique()
+        is_selected_users = random.sample(list(_unique_users), num_user)
+        df = df[df['user_id'].isin(is_selected_users)]
+        logger.info(f"Randomly selected {num_user} users from {len(_unique_users)} unique users.")
         return df
 
     def _parse_acl18_tweets(self):
@@ -79,9 +108,17 @@ class TweetsParser:
         # 중복 제거
         tweets_df = self._drop_duplicate_tweets(tweets_df)
 
+        # 최근 2년만 남기기
+        tweets_df = self._drop_old_tweets(tweets_df)
+
+        # user 수 줄이기
+        num_user = 10000
+        tweets_df = self._random_sample_by_user(tweets_df, num_user)
+
         tweets_df.to_csv(KAGGLE1_FLATTENED_TWITTER_CSV_PATH, index=False, encoding='utf-8')
         tweets_df.to_pickle(KAGGLE1_FLATTENED_TWITTER_PKL_PATH)
 
+        logger.info(f"row count: {tweets_df.shape[0]}")
         logger.info(f"Kaggle1 tweets data parsed and saved to {KAGGLE1_FLATTENED_TWITTER_CSV_PATH}")
 
     def parse_tweets_data(self):

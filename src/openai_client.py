@@ -254,7 +254,7 @@ class OpenAIClient:
                     # Assuming custom_id format includes index
                     parts = custom_id.split('-')
                     for i, part in enumerate(parts):
-                        if part.isdigit() and i < len(parts) - 1:
+                        if part.isdigit() and i < len(parts):
                             index = int(part)
                             break
                     
@@ -270,6 +270,7 @@ class OpenAIClient:
                         
                 except Exception as e:
                     logger.warning(f"Error parsing result: {e}")
+                    raise
                     continue
         
         # Replace empty results with error marker

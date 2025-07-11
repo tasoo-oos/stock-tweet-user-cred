@@ -42,7 +42,7 @@ def main():
         epilog="""
 Examples:
   python -m src query --input tweets.csv --model gpt-4.1-mini-2025-04-14
-  python -m src parse --input raw_tweets.json --output parsed_tweets.csv
+  python -m src parse --dataset-choice acl18
   python -m src extract-sentiment --input dataset/tweets.csv
   python -m src user-credibility --analyze
   python -m src generate-prompts --dataset flare-acl --split train --example
@@ -108,28 +108,59 @@ Examples:
     )
 
     # ========== Sentiment Analysis Command ==========
-    sentiment_parse = subparsers.add_parser(
+    sentiment_parser = subparsers.add_parser(
         "sentiment-analyze",
         help="Analyze sentiment of tweets using OpenAI Batch API"
     )
-    sentiment_parse.add_argument(
+    sentiment_parser.add_argument(
         "--dataset-choice",
         type=str,
         choices=['acl18', 'kaggle1'],
         default='kaggle1',
         help="Dataset choice for sentiment analysis (choices: [acl18, kaggle1])"
     )
-    sentiment_parse.add_argument(
+    sentiment_parser.add_argument(
         "--dataset-path",
         type=str,
-        default=ACL18_FLATTENED_TWITTER_CSV_PATH,
         help="Path to the dataset containing tweets"
     )
-    sentiment_parse.add_argument(
+    sentiment_parser.add_argument(
         "--model",
         type=str,
         default=DEFAULT_GPT_MODEL,
         help=f"OpenAI model to use (default: {DEFAULT_GPT_MODEL})"
+    )
+    sentiment_parser.add_argument(
+        "--num-samples",
+        type=int,
+        default=0,
+        help="Number of samples to process (0 for all)"
+    )
+    sentiment_parser.add_argument(
+        "--batch-split",
+        type=int,
+        default=1,
+        help="Number of batches to split the dataset into (default: 1, no split) (num-samples가 0일 때만 사용 가능)"
+    )
+    sentiment_parser.add_argument(
+        "--batch-index",
+        type=int,
+        default=0,
+        help="batch-split 사용 시, 몇 번째 배치를 처리할지 지정 (0/4, 1/4, 2/4, 3/4 등) (default: 0, 첫 번째 배치)"
+    )
+    sentiment_parser.add_argument(
+        "--check-batch",
+        nargs="?",
+        const="recent",
+        type=str,
+        help="Check status of existing batch ID"
+    )
+    sentiment_parser.add_argument(
+        "--list-batches",
+        type=int,
+        nargs="?",
+        const=10,
+        help="List recent batch IDs (default: 10, use 0 for all)"
     )
 
     # ========== Extract Sentiment Command ==========
@@ -332,10 +363,19 @@ Examples:
             logger.info("Parse completed successfully")
 
         elif args.command == "sentiment-analyze":
-            logger.info(f"Analyzing sentiment for dataset at {args.dataset_path}")
-            analyzer = SentimentAnalyze(args.datset_choice, args.dataset_path, args.model)
+            if args.check_batch:
+                analyzer = SentimentAnalyze(args.dataset_choice, args.num_samples, args.dataset_path, args.model)
+                analyzer.check_batch(args.check_batch)
 
-            logger.info("Sentiment analysis completed successfully")
+            elif args.list_batches is not None:
+                list_batch_id(args.list_batches)
+
+            else:
+                logger.info(f"Analyzing sentiment for dataset at {args.dataset_path}")
+                analyzer = SentimentAnalyze(args.dataset_choice, args.num_samples, args.dataset_path, args.model)
+                analyzer.generate_batch(batch_split=args.batch_split, batch_index=args.batch_index)
+
+                logger.info("Sentiment analysis completed successfully")
 
         elif args.command == "extract-sentiment":
             result = extract_main()
