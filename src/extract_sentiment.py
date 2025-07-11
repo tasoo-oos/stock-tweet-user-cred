@@ -10,7 +10,7 @@ import pandas as pd
 import numpy as np
 
 from .constants import (
-    COMBINED_JSONL_PATH,
+    ACL18_COMBINED_JSONL_PATH,
     OUTPUT_TABLE_STOCK_PATH,
     ACL18_PRICE_DATA_DIR,
     SENTIMENT_LEVELS,
@@ -150,13 +150,13 @@ class SentimentPriceExtractor:
         Process the combined JSONL file and extract sentiment with stock data.
         
         Args:
-            input_path: Path to combined.jsonl file (defaults to COMBINED_JSONL_PATH)
+            input_path: Path to combined.jsonl file (defaults to ACL18_COMBINED_JSONL_PATH)
             
         Returns:
             DataFrame with extracted data
         """
         if input_path is None:
-            input_path = COMBINED_JSONL_PATH
+            input_path = ACL18_COMBINED_JSONL_PATH
         
         extracted_data = []
         

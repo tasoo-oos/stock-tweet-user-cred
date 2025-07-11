@@ -15,10 +15,12 @@ from .utils import setup_logging
 from .constants import (
     DEFAULT_GPT_MODEL,
     OUTPUT_TABLE_USER_STOCK_PATH,
-    CACHE_DIR
+    CACHE_DIR,
+    FLATTENED_TWITTER_CSV_PATH,
 )
 from .extract_sentiment import main as extract_main
 from .user_credibility import UserCredibilityAnalyzer
+from .sentiment_analyze import SentimentAnalyze
 from .benchmark import BenchmarkRunner
 from .data_loader import DataLoader
 from .openai_client import OpenAIClient
@@ -112,6 +114,31 @@ Examples:
         choices=["csv", "parquet"],
         default="csv",
         help="Output format (default: csv)"
+    )
+
+    # ========== Sentiment Analysis Command ==========
+    sentiment_parse = subparsers.add_parser(
+        "sentiment-analyze",
+        help="Analyze sentiment of tweets using OpenAI Batch API"
+    )
+    sentiment_parse.add_argument(
+        "dataset-choice",
+        type=str,
+        choices=['acl18', 'kaggle1'],
+        default='kaggle1',
+        help="Dataset choice for sentiment analysis (choices: [acl18, kaggle1])"
+    )
+    sentiment_parse.add_argument(
+        "dataset-path",
+        type=str,
+        default=FLATTENED_TWITTER_CSV_PATH,
+        help="Path to the dataset containing tweets"
+    )
+    sentiment_parse.add_argument(
+        "--model",
+        type=str,
+        default=DEFAULT_GPT_MODEL,
+        help=f"OpenAI model to use (default: {DEFAULT_GPT_MODEL})"
     )
 
     # ========== Extract Sentiment Command ==========
@@ -319,6 +346,12 @@ Examples:
             logger.info(f"Parsing {args.input} to {output_path}")
             result = loader.parse_twitter_data(args.input, output_path, args.format)
             logger.info("Parse completed successfully")
+
+        elif args.command == "sentiment-analyze":
+            logger.info(f"Analyzing sentiment for dataset at {args.dataset_path}")
+            analyzer = SentimentAnalyze(args.datset_choice, args.dataset_path, args.model)
+
+            logger.info("Sentiment analysis completed successfully")
 
         elif args.command == "extract-sentiment":
             result = extract_main()

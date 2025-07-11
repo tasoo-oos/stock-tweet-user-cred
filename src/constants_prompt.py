@@ -1,4 +1,46 @@
 
+# ========================================
+# Sentiment Analysis Prompt Constants
+# ========================================
+
+# ========== SYSTEM INSTRUCTION ==========
+
+SENTIMENT_ANALYSIS_SYSTEM_INSTRUCTION = """
+You are a precise financial sentiment analyst. Your job is to classify the sentiment of tweets about stocks. Think of the timeframe as the next 2 weeks after the post.
+
+Classify the sentiment as one of these exact phrases:
+- negative: Bearish sentiment about the stock, implying a decline in price in the near future.
+- neutral: No clear sentiment, or mixed signals about the stock's future.
+- positive: Bullish sentiment about the stock, implying an increase in price in the near future.
+
+Consider:
+1. Direct statements about the stock's future
+2. Emotional tone and language intensity
+3. Specific predictions or targets mentioned
+4. Overall market sentiment conveyed
+5. Any relevant context about the company or sector
+
+Respond in one word, nothing else.
+""".strip()
+
+# ========== QUERY INSTRUCTIONS ==========
+
+SENTIMENT_ANALYSIS_QUERY_INSTRUCTION = """
+Target stock: {stock_ticker}{company_name}
+
+Tweet:
+```txt
+{tweet_text}
+```
+""".strip()
+# company_name : {f'({company_name})' if company_name else ''}
+
+
+
+# ========================================
+# Stock Price Prediction Prompt Constants
+# ========================================
+
 # ========== SYSTEM INSTRUCTION ==========
 
 DEFAULT_GPT_SYSTEM_INSTRUCTION_version1 = """
