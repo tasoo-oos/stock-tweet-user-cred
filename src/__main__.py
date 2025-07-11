@@ -16,11 +16,13 @@ from .constants import (
     DEFAULT_GPT_MODEL,
     OUTPUT_TABLE_USER_STOCK_PATH,
     CACHE_DIR,
-    FLATTENED_TWITTER_CSV_PATH,
+    ACL18_FLATTENED_TWITTER_CSV_PATH,
+    FLATTENED_TWITTER_DIR,
 )
+from .parse import TweetsParser
+from .sentiment_analyze import SentimentAnalyze
 from .extract_sentiment import main as extract_main
 from .user_credibility import UserCredibilityAnalyzer
-from .sentiment_analyze import SentimentAnalyze
 from .benchmark import BenchmarkRunner
 from .data_loader import DataLoader
 from .openai_client import OpenAIClient
@@ -98,22 +100,11 @@ Examples:
         help="Parse raw Twitter data into flattened structure"
     )
     parse_parser.add_argument(
-        "--input",
+        "--dataset-choice",
         type=str,
+        choices=['acl18', 'kaggle1'],
         required=True,
-        help="Input JSON file path"
-    )
-    parse_parser.add_argument(
-        "--output",
-        type=str,
-        help="Output CSV file path"
-    )
-    parse_parser.add_argument(
-        "--format",
-        type=str,
-        choices=["csv", "parquet"],
-        default="csv",
-        help="Output format (default: csv)"
+        help="Dataset choice for parsing (choices: [acl18, kaggle1])"
     )
 
     # ========== Sentiment Analysis Command ==========
@@ -122,16 +113,16 @@ Examples:
         help="Analyze sentiment of tweets using OpenAI Batch API"
     )
     sentiment_parse.add_argument(
-        "dataset-choice",
+        "--dataset-choice",
         type=str,
         choices=['acl18', 'kaggle1'],
         default='kaggle1',
         help="Dataset choice for sentiment analysis (choices: [acl18, kaggle1])"
     )
     sentiment_parse.add_argument(
-        "dataset-path",
+        "--dataset-path",
         type=str,
-        default=FLATTENED_TWITTER_CSV_PATH,
+        default=ACL18_FLATTENED_TWITTER_CSV_PATH,
         help="Path to the dataset containing tweets"
     )
     sentiment_parse.add_argument(
@@ -333,18 +324,11 @@ Examples:
                 logger.warning("Single tweet processing needs specific implementation")
 
         elif args.command == "parse":
-            loader = DataLoader()
+            logger.info(f"Parsing the dataset {args.dataset_choice}")
 
-            # Determine output path
-            if args.output:
-                output_path = args.output
-            else:
-                input_path = Path(args.input)
-                output_path = str(input_path.with_suffix(f".{args.format}"))
+            parser = TweetsParser(dataset_choice=args.dataset_choice)
+            result = parser.parse_tweets_data()
 
-            # Parse the data
-            logger.info(f"Parsing {args.input} to {output_path}")
-            result = loader.parse_twitter_data(args.input, output_path, args.format)
             logger.info("Parse completed successfully")
 
         elif args.command == "sentiment-analyze":
