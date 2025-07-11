@@ -33,6 +33,16 @@ class TweetsParser:
     def __init__(self, dataset_choice):
         self.dataset_choice = dataset_choice
 
+    def _drop_duplicate_tweets(self, df):
+        """
+        Drop duplicate tweets based on user_id, text, and stock_ticker.
+        """
+        initial_shape = df.shape
+        df = df.drop_duplicates(['user_id', 'text', 'stock_ticker'])
+        final_shape = df.shape
+        logger.info(f"Dropped {initial_shape[0] - final_shape[0]} duplicate tweets.")
+        return df
+
     def _parse_acl18_tweets(self):
         """
         Parse ACL18 tweets data.
@@ -63,7 +73,11 @@ class TweetsParser:
             'ticker_symbol': 'stock_ticker',
         })
 
+        tweets_df.dropna(subset=['user_name'], inplace=True)  # Drop rows where user_name is NaN
         tweets_df['user_id'] = pd.factorize(tweets_df['user_name'])[0] + 1  # Ensure user_id starts from 1
+
+        # 중복 제거
+        tweets_df = self._drop_duplicate_tweets(tweets_df)
 
         tweets_df.to_csv(KAGGLE1_FLATTENED_TWITTER_CSV_PATH, index=False, encoding='utf-8')
         tweets_df.to_pickle(KAGGLE1_FLATTENED_TWITTER_PKL_PATH)
