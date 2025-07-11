@@ -102,9 +102,9 @@ class SentimentAnalyze:
             except KeyError:
                 company_name = None
 
-            tweet_text = row['tweet_text']
+            tweet_text = row['text']
             timestamp = self._format_timestamp(row['created_at'])
-            tweet_id = row['tweet_id']
+            tweet_id = row['id']
 
             prompt = self.create_prompt(stock_ticker, company_name, tweet_text)
             prompts.append(prompt)
