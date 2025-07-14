@@ -29,7 +29,6 @@ import math
 import scipy.stats as st
 from transformers import LlamaTokenizer
 import random
-from sklearn.preprocessing import MinMaxScaler
 
 random.seed(42)
 
@@ -128,16 +127,32 @@ class GeneratePrompts():
         # user별 신뢰도 산정을 위해선 neutral을 일단 제거해야 함.
         non_neutral_df = self.sentiment_full_df[self.sentiment_full_df['Sentiment'] != 'neutral']
         self.user_cred_df = non_neutral_df.groupby('user_id').apply(self.process_user_accuracy)
+
+        # 연속적인 정확도 계산
         self.user_cred_df['con_acc_log1p'] = np.log1p(self.user_cred_df['continuous_accuracy'])
+
+        # 연속적인 정확도 + 베이즈 평균
+        C = self.user_cred_df['continuous_accuracy'].mean() # 3.865 (acl18)
+        m = self.user_cred_df['pred_counts'].quantile(0.75) # 16 (acl18)
+        print(f"Bayesian Average Parameters: Global Avg. Accuracy (C) = {C:.4f}, Prior Weight (m) = {m:.2f}")
+
+        def bayesian_average_score(row):
+            R = row['continuous_accuracy']
+            v = row['pred_counts']
+            return (v / (v + m)) * R + (m / (v + m)) * C
+
+        self.user_cred_df['bayesian_score'] = self.user_cred_df.apply(bayesian_average_score, axis=1)
+        self.user_cred_df['bayesian_pct'] = self.user_cred_df['bayesian_score'].rank(pct=True)
+
+        # 이산적인 정확도 계산
         self.user_cred_df['wilson_score'] = self.user_cred_df.apply(
             lambda row: wilson_lower_bound(row['success_counts'], row['pred_counts']),
             axis=1
         )
-        scaler = MinMaxScaler()
-        self.user_cred_df['wilson_minmax'] = scaler.fit_transform(self.user_cred_df['wilson_score'])
+        self.user_cred_df['wilson_minmax'] = (self.user_cred_df['wilson_score'] - self.user_cred_df['wilson_score'].min()) / (self.user_cred_df['wilson_score'].max() - self.user_cred_df['wilson_score'].min())
 
         # 임시 저장
-        self.user_cred_df.to_csv(TEMP_DIR / "user_cred.csv", encoding='utf-8', index=False)
+        self.user_cred_df.to_csv(TEMP_DIR / "user_cred.csv", encoding='utf-8')
 
         # 출력
         print(self.user_cred_df.head())
@@ -175,30 +190,35 @@ class GeneratePrompts():
         processed_text = re.sub(URL_PATTERN, '', processed_text)
         return processed_text
 
-    def process_tweet_file(self, ticker: str, date_str: str, use_wilson=True) -> dict[str, list[str]]:
+    def process_tweet_file(self, ticker: str, date_str: str, use_bayesian=True) -> dict[str, list[str]]:
         """
         주어진 티커와 날짜에 해당하는 트윗 파일을 읽고 처리 -> query_type별 트윗 리스트(\n만 join하면 됨)를 반환합니다.
-        현재는 6가지 버전의 트윗 목록을 반환합니다:
+        현재는 n가지 버전의 트윗 목록을 반환합니다:
         1. basic
         2. non_neutral
         3. exclude_low
         4. include_cred
         5. exclude_low+0.5s
         6. exclude_low-0.5s
+        ...
         """
 
-        if use_wilson:
-            criterion = 'wilson_score'
+        if use_bayesian:
+            criterion = 'bayesian_score'
         else:
             criterion = 'con_acc_log1p'
-
+            
         file_path = ACL18_TWEET_DATA_DIR / ticker.upper() / date_str
         cred_mean = self.user_cred_df[criterion].mean()
         cred_std = self.user_cred_df[criterion].std()
+        # high / middle / low 구분은 상하위 20%로
+        cred_high_cut = self.user_cred_df[criterion].quantile(0.8) # bayesian: 4.174
+        cred_low_cut = self.user_cred_df[criterion].quantile(0.2) # 0.2일 땐 bayesian: 3.437
+
         cred_threshold = cred_mean  # 기본 임계값은 평균으로 설정.
-        high_cred_user_df = self.user_cred_df[self.user_cred_df[criterion] >= cred_threshold]
-        high_cred_user_df_plus_half_std = self.user_cred_df[self.user_cred_df[criterion] >= cred_mean + 0.5 * cred_std]
-        high_cred_user_df_minus_half_std = self.user_cred_df[self.user_cred_df[criterion] >= cred_mean - 0.5 * cred_std]
+        credible_user_df = self.user_cred_df[self.user_cred_df[criterion] >= cred_threshold]
+        credible_user_df_plus_half_std = self.user_cred_df[self.user_cred_df[criterion] >= cred_mean + 0.5 * cred_std]
+        credible_user_df_minus_half_std = self.user_cred_df[self.user_cred_df[criterion] >= cred_mean - 0.5 * cred_std]
 
         max_tweets_per_day = 10
 
@@ -239,31 +259,63 @@ class GeneratePrompts():
                         finma_basic_tweets.append(truncated_text)
 
                         # neutral 거르기
-                        if self.sentiment_df[self.sentiment_df['tweet_id'] == tweet_id].iloc[0]['sentiment'] != 'neutral':
+                        if self.sentiment_df[self.sentiment_df['tweet_id'] == tweet_id].iloc[0]['sentiment'] == 'neutral':
+                            is_neutral = True
+                        else:
+                            is_neutral = False
+
+                        if not is_neutral:
                             tweets_dic['non_neutral'].append(f'- "{formatted_text}"')
 
                         # user 정보 불러오기
                         user_info = tweet_data.get('user', {})
                         uid = int(user_info.get('id', 0))
 
+                        if uid in self.user_cred_df.index:
+                            cred_score = self.user_cred_df.loc[uid, criterion]
+                            cred_pct = self.user_cred_df['bayesian_pct'].loc[uid] if use_bayesian else self.user_cred_df['con_acc_log1p'].loc[uid]
+
+                            include_cred_text = (
+                                f'- "{formatted_text}"'
+                                + '\n' +
+                                f'- user_credibility: {cred_pct:.2f}'
+                            )
+
+                            if cred_score >= cred_high_cut:
+                                cred_level = 'high'
+                            elif cred_score >= cred_low_cut:
+                                cred_level = 'medium'
+                            else:
+                                cred_level = 'low'
+
+                            include_cred_level_text = (
+                                f'- "{formatted_text}"'
+                                + '\n' +
+                                f'- user_credibility: {cred_level}'
+                            )
+
+                            tweets_dic['include_all_cred'].append(include_cred_text)
+                            tweets_dic['include_cred_level'].append(include_cred_level_text)
+
                         # threshold보다 낮은 신뢰도를 가진 유저 거르기
-                        if uid in high_cred_user_df.index:
-                            user_cred_row = high_cred_user_df.loc[uid]
+                        if uid in credible_user_df.index:
+                            user_cred_row = credible_user_df.loc[uid]
 
                             tweets_dic['exclude_low'].append(f'- "{formatted_text}"')
+                            if not is_neutral:
+                                tweets_dic['nn_exclude_low'].append(f'- "{formatted_text}"')
+
                             finma_cred_users.append((user_cred_row[criterion], truncated_text))
 
                             # 메타 데이터 포함
-                            tweets_dic['include_cred'].append(
-                                f'- "{formatted_text}"'
-                                +'\n'+
-                                f'- user_credibility(wilson_score): {user_cred_row[criterion]:.2f}'
-                            )
+                            tweets_dic['include_cred'].append(include_cred_text)
+                            if not is_neutral:
+                                tweets_dic['nn_include_cred'].append(include_cred_text)
 
-                        if uid in high_cred_user_df_plus_half_std.index:
+                        if uid in credible_user_df_plus_half_std.index:
                             tweets_dic['exclude_low+0.5s'].append(f'- "{formatted_text}"')
 
-                        if uid in high_cred_user_df_minus_half_std.index:
+                        if uid in credible_user_df_minus_half_std.index:
                             tweets_dic['exclude_low-0.5s'].append(f'- "{formatted_text}"')
 
                     except json.JSONDecodeError as e_json:
@@ -325,6 +377,12 @@ class GeneratePrompts():
             price_table = prefix.split(spliter)[1]
             return query_instruction + f'\n\n{COLUMN_INFO}\n' + spliter + price_table
 
+        if instruction_type == 'with_column_info+cred':
+            query_instruction = QUERY_INSTRUCTION.format(ticker=ticker, date=date)
+            spliter = '\nContext: '
+            price_table = prefix.split(spliter)[1]
+            return query_instruction + f'\n\n{COLUMN_INFO}\n' + spliter + price_table + '\n\nUser Credibility:'
+
     def process_single_query(self, query_text: str) -> dict:
         """
         단일 쿼리를 처리하여 n 가지 버전의 새로운 쿼리 문자열을 생성합니다.
@@ -358,7 +416,7 @@ class GeneratePrompts():
         # --- 쿼리 문자열 생성 단계 ---
 
         # 'default'면 prefix를 그대로 사용
-        new_prefix = self.make_prefix(prefix, 'basic') #SOTA는 with_column_info로 설정
+        new_prefix = self.make_prefix(prefix, 'with_column_info') #SOTA는 with_column_info로 설정
 
         query_list_dic = {}
         for query in self.query_types:

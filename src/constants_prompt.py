@@ -72,7 +72,7 @@ The JSON object must strictly follow this schema:
 The value for "answer" MUST be one of "Rise" or "Fall".
 
 Begin your response immediately with "{"
-""".strip() # 이전 프롬프트 (version 1) # 여기에 confidence 제거함
+""".strip() # 이전 프롬프트 (version 1) # 여기에 confidence 제거함 # 성능 딱히
 
 
 DEFAULT_GPT_SYSTEM_INSTRUCTION_version2 = """
@@ -93,7 +93,7 @@ A **single JSON object** with exactly these keys (numbers, not strings):
 Guidelines:
 1. Think step-by-step internally, but reveal **only** the JSON.
 2. Start your response with `{` and end with `}` — no extra text.
-""".strip() # 현재 프롬프트 (version 2)
+""".strip() # 현재 프롬프트 (version 2) # 성능 딱히
 
 DEFAULT_GPT_SYSTEM_INSTRUCTION_COT_version1 = """
 You are an expert financial analyst. Your task is to predict stock price movement based on the user's query.
@@ -113,8 +113,66 @@ The JSON object must strictly follow this schema:
 Your reasoning MUST be filled into the reasoning object within the JSON. The final answer and confidence should be derived from your synthesis.
 
 Begin your response immediately with "{"
-"""
+""".strip()
 
+DEFAULT_GPT_SYSTEM_INSTRUCTION_COT_version2 = """
+You are an expert financial analyst. Your task is to predict stock price movement based on the user's query.
+You MUST provide your response ONLY in the format of a valid JSON object, and nothing else. Do not include explanations or any text outside the JSON structure.
+
+The JSON object must strictly follow this schema:
+{
+"reasoning": {
+"quantitative_analysis": "string: Analyze the historical data, noting recent trends in short-term (inc-5, inc-10) and long-term (inc-25, inc-30) indicators.",
+"qualitative_analysis": "string: Analyze the sentiment of social media posts, identifying keywords and the overall tone (positive, negative, neutral).",
+"synthesis": "string: Synthesize the quantitative and qualitative findings. State whether they are aligned or contradictory and how you weigh them to reach a conclusion."
+},
+"answer": "string: Must be one of 'Rise' or 'Fall'."
+}
+
+Your reasoning MUST be filled into the reasoning object within the JSON. The final answer and confidence should be derived from your synthesis.
+
+Begin your response immediately with "{"
+""".strip() # confidence 제거
+
+
+DEFAULT_GPT_SYSTEM_INSTRUCTION_COT_version3 = """
+You are an expert financial analyst. Your task is to predict stock price movement based on the user's query.
+You MUST provide your response ONLY in the format of a valid JSON object, and nothing else. Do not include explanations or any text outside the JSON structure.
+
+The JSON object must strictly follow this schema:
+{
+"reasoning": {
+"quantitative_analysis": "string: Analyze the historical data, noting recent trends in short-term (inc-5, inc-10) and long-term (inc-25, inc-30) indicators.",
+"qualitative_analysis": "string: Analyze social media sentiment, weighing posts by user credibility (high > medium > low). Identify the overall weighted sentiment and note any conflicts between credibility tiers.",
+"synthesis": "string: Synthesize the quantitative and qualitative findings. State whether they are aligned or contradictory and how you weigh them to reach a conclusion."
+},
+"answer": "string: Must be one of 'Rise' or 'Fall'.",
+"confidence": "float: A number between 0.0 and 1.0, based on the strength and alignment of the evidence in your reasoning."
+}
+
+Your reasoning MUST be filled into the reasoning object within the JSON. The final answer and confidence should be derived from your synthesis.
+
+Begin your response immediately with "{"
+""".strip() # credibility 레벨 반영 (high, medium, low) into "qualitative_analysis"
+
+DEFAULT_GPT_SYSTEM_INSTRUCTION_COT_version4 = """
+You are an expert financial analyst. Your task is to predict stock price movement based on the user's query.
+You MUST provide your response ONLY in the format of a valid JSON object, and nothing else. Do not include explanations or any text outside the JSON structure.
+
+The JSON object must strictly follow this schema:
+{
+"reasoning": {
+"quantitative_analysis": "string: Analyze the historical data, noting recent trends in short-term (inc-5, inc-10) and long-term (inc-25, inc-30) indicators.",
+"qualitative_analysis": "string: Analyze social media sentiment, weighing posts by user credibility (high > medium > low). Identify the overall weighted sentiment and note any conflicts between credibility tiers.",
+"synthesis": "string: Synthesize the quantitative and qualitative findings. State whether they are aligned or contradictory and how you weigh them to reach a conclusion."
+},
+"answer": "string: Must be one of 'Rise' or 'Fall'."
+}
+
+Your reasoning MUST be filled into the reasoning object within the JSON. The final answer and confidence should be derived from your synthesis.
+
+Begin your response immediately with "{"
+""".strip() # credibility 레벨 반영 (high, medium, low) into "qualitative_analysis" # confidence 제거
 
 # ========== QUERY INSTRUCTIONS ==========
 

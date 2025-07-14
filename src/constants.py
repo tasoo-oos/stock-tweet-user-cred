@@ -80,7 +80,7 @@ from .constants_prompt import *
 SENTIMENT_ANALYSIS_SYSTEM_INSTRUCTION = SENTIMENT_ANALYSIS_SYSTEM_INSTRUCTION
 SENTIMENT_ANALYSIS_QUERY_INSTRUCTION = SENTIMENT_ANALYSIS_QUERY_INSTRUCTION
 
-DEFAULT_GPT_SYSTEM_INSTRUCTION = DEFAULT_GPT_SYSTEM_INSTRUCTION_COT_version1
+DEFAULT_GPT_SYSTEM_INSTRUCTION = DEFAULT_GPT_SYSTEM_INSTRUCTION_COT_version3
 QUERY_INSTRUCTION = QUERY_INSTRUCTION
 
 # Prompt configuration
@@ -97,15 +97,24 @@ BATCH_API_SLEEP_TIME = 5
 
 # Batch IDs for evaluation (주요 배치 ID 저장)
 BATCH_ID_MATCH = {
-    'basic':'batch_685cd0be015881908f09b9430bde0430', # flare 원본 데이터셋 조금 수정 -> 모든 트윗 포함 + 형식 약간 바꿈
-    'non_tweets':'batch_685d71b160ec8190a2dde5ad64f2a63f', # 트윗 없이 주가 변동만 넣었을 때의 결과 (트위터 정보가 유의미한지 파악)
+    'basic':'batch_687491c71e848190951f0e22d36dd5d2', # flare 원본 데이터셋 조금 수정 -> 모든 트윗 포함 + 형식 약간 바꿈
+    'non_tweets':'', # 트윗 없이 주가 변동만 넣었을 때의 결과 (트위터 정보가 유의미한지 파악)
 
-    'non_neutral':'batch_685ce8241c648190bf57f433f69ac8a4', # non_neutral + 임계값 이하의 신뢰도를 가진 유저를 제거
-    'exclude_low':'batch_685cf93779388190a12643dba2978214', # non_neutral + 임계값 이하의 신뢰도를 가진 유저를 제거
-    'include_cred':'batch_685d076df2a08190ac5aacb9b12ae75d', # exclude_low + 유저 신뢰도를 프롬프트에 추가
+    'non_neutral':'', # 감성 분석 결과가 neutral인 트윗 제거
 
-    'exclude_low+0.5s':'batch_685d343e7b108190a6f116a6d3523b2a', # exclude_low에서 threshold를 평균+0.5표준편차로 설정 (상위 30%만 남김)
-    'exclude_low-0.5s':'batch_685d4bd0b4e08190b70f7accdfdf9f7a', # exclude_low에서 threshold를 평균-0.5표준편차로 설정 (상위 70%만 남김)
+    'nn_exclude_low': '',  # non_neutral + 임계값 이하의 신뢰도를 가진 유저를 제거
+    'exclude_low':'batch_6874c9db67a88190ac3fb7601e141bd1', # 임계값 이하의 신뢰도를 가진 유저를 제거 (neutral 포함)
+
+    'nn_include_cred':'', # non_neutral + exclude_low + 유저 신뢰도를 프롬프트에 추가
+    'include_cred':'', # exclude_low + 유저 신뢰도를 프롬프트에 추가 (neutral 포함)
+    'include_all_cred':'', # 유저 신뢰도를 프롬프트에 추가 (임계값 이하의 신뢰도를 가진 유저 포함, neutral 포함)
+    'include_cred_level':'batch_6874d7afa6a88190907d79bc20987299', # 유저 신뢰도를 프롬프트에 추가 (임계값 이하의 신뢰도를 가진 유저 포함, neutral 포함) + 신뢰도 레벨(high, medium, low)로 반영
+
+    'exclude_low+0.5s':'', # exclude_low에서 threshold를 평균+0.5표준편차로 설정 (상위 30%만 남김)
+    'exclude_low-0.5s':'', # exclude_low에서 threshold를 평균-0.5표준편차로 설정 (상위 70%만 남김)
+
+    'finma_basic':'',
+    'finma_exclude_low':'',
 }
 
 # ========== Stock analysis configuration ==========
