@@ -5,6 +5,7 @@ import pandas as pd
 import re
 import json
 import numpy as np
+
 from .constants import (
     FLARE_DATASET_SPLITS,
     FLARE_DATASET_URL_PREFIX,
@@ -22,10 +23,50 @@ from .constants import (
     QUERY_INSTRUCTION,
     COLUMN_INFO,
     PREFIX_FOR_TWEET_LIST,
+    TEMP_DIR,
 )
+import math
+import scipy.stats as st
+from transformers import LlamaTokenizer
+import random
+from sklearn.preprocessing import MinMaxScaler
+
+random.seed(42)
+
+
+def wilson_lower_bound(pos, n, confidence=0.95):
+    """
+    윌슨 신뢰 구간의 하한값을 계산합니다.
+
+    Parameters:
+    - pos (int): 성공 횟수 (positive outcomes)
+    - n (int): 전체 시도 횟수 (total trials)
+    - confidence (float): 신뢰 수준 (e.g., 0.95 for 95%)
+
+    Returns:
+    - float: 윌슨 신뢰 구간의 하한값 (신뢰도 점수)
+    """
+    if n == 0:
+        return 0
+
+    # z-score 계산 (예: 95% 신뢰 수준의 z-score는 약 1.96)
+    # 양측 검정을 기준으로 하므로, (1-confidence)/2 만큼을 양쪽 꼬리에서 제외
+    z = st.norm.ppf(1 - (1 - confidence) / 2)
+
+    # 관측된 성공 비율
+    p_hat = pos / n
+
+    # 윌슨 스코어 공식 적용
+    numerator = p_hat + z ** 2 / (2 * n) - z * math.sqrt((p_hat * (1 - p_hat) + z ** 2 / (4 * n)) / n)
+    denominator = 1 + z ** 2 / n
+
+    return numerator / denominator
 
 class GeneratePrompts():
     def __init__(self, dataset, split):
+        self.tokenizer = LlamaTokenizer.from_pretrained("TheFinAI/finma-7b-full")
+        self.tweet_max_tokens = 33
+
         self.dataset = dataset
         self.split = split
         self.ANSWER_SUFFIX = ANSWER_SUFFIX
@@ -38,7 +79,7 @@ class GeneratePrompts():
             if split == 'all':
                 self.flare_splits = list(FLARE_DATASET_SPLITS.keys())
             else:
-                self.flare_splits = [split]
+                self.flare_splits = ['acl_'+split]
 
             self.load_sentiment_dataframe(OUTPUT_TABLE_USER_STOCK_PATH)
             self.create_user_cred_df()
@@ -88,7 +129,18 @@ class GeneratePrompts():
         non_neutral_df = self.sentiment_full_df[self.sentiment_full_df['Sentiment'] != 'neutral']
         self.user_cred_df = non_neutral_df.groupby('user_id').apply(self.process_user_accuracy)
         self.user_cred_df['con_acc_log1p'] = np.log1p(self.user_cred_df['continuous_accuracy'])
-        # self.user_cred_df['pred_count'] = non_neutral_df.groupby('user_id').size()
+        self.user_cred_df['wilson_score'] = self.user_cred_df.apply(
+            lambda row: wilson_lower_bound(row['success_counts'], row['pred_counts']),
+            axis=1
+        )
+        scaler = MinMaxScaler()
+        self.user_cred_df['wilson_minmax'] = scaler.fit_transform(self.user_cred_df['wilson_score'])
+
+        # 임시 저장
+        self.user_cred_df.to_csv(TEMP_DIR / "user_cred.csv", encoding='utf-8', index=False)
+
+        # 출력
+        print(self.user_cred_df.head())
 
     def extract_query_parts(self, query_text: str) -> tuple[str, str, str]:  # ticker가 None일 수 없으므로 타입 힌트 변경
         """
@@ -123,7 +175,7 @@ class GeneratePrompts():
         processed_text = re.sub(URL_PATTERN, '', processed_text)
         return processed_text
 
-    def process_tweet_file(self, ticker: str, date_str: str) -> dict[str, list[str]]:
+    def process_tweet_file(self, ticker: str, date_str: str, use_wilson=True) -> dict[str, list[str]]:
         """
         주어진 티커와 날짜에 해당하는 트윗 파일을 읽고 처리 -> query_type별 트윗 리스트(\n만 join하면 됨)를 반환합니다.
         현재는 6가지 버전의 트윗 목록을 반환합니다:
@@ -134,17 +186,28 @@ class GeneratePrompts():
         5. exclude_low+0.5s
         6. exclude_low-0.5s
         """
+
+        if use_wilson:
+            criterion = 'wilson_score'
+        else:
+            criterion = 'con_acc_log1p'
+
         file_path = ACL18_TWEET_DATA_DIR / ticker.upper() / date_str
-        cred_mean = self.user_cred_df['con_acc_log1p'].mean()
-        cred_std = self.user_cred_df['con_acc_log1p'].std()
+        cred_mean = self.user_cred_df[criterion].mean()
+        cred_std = self.user_cred_df[criterion].std()
         cred_threshold = cred_mean  # 기본 임계값은 평균으로 설정.
-        high_cred_user_df = self.user_cred_df[self.user_cred_df['con_acc_log1p'] >= cred_threshold]
-        high_cred_user_df_plus_half_std = self.user_cred_df[self.user_cred_df['con_acc_log1p'] >= cred_mean + 0.5 * cred_std]
-        high_cred_user_df_minus_half_std = self.user_cred_df[self.user_cred_df['con_acc_log1p'] >= cred_mean - 0.5 * cred_std]
+        high_cred_user_df = self.user_cred_df[self.user_cred_df[criterion] >= cred_threshold]
+        high_cred_user_df_plus_half_std = self.user_cred_df[self.user_cred_df[criterion] >= cred_mean + 0.5 * cred_std]
+        high_cred_user_df_minus_half_std = self.user_cred_df[self.user_cred_df[criterion] >= cred_mean - 0.5 * cred_std]
+
+        max_tweets_per_day = 10
 
         tweets_dic = {}
         for query in self.query_types:
             tweets_dic[query] = []
+
+        finma_basic_tweets = []
+        finma_cred_users = []
 
         if not file_path.exists():
             print(f"File not found: {file_path}")
@@ -152,13 +215,17 @@ class GeneratePrompts():
 
         try:
             with file_path.open('r', encoding='utf-8') as f:
-                for line in f:
+                for idx, line in enumerate(f):
                     try:
                         tweet_data = json.loads(line.strip())
 
                         text = tweet_data.get('text', '')
                         tweet_id = int(tweet_data.get('id', 0))
                         formatted_text = self.format_tweet_text(text)
+
+                        token_ids = self.tokenizer.encode(formatted_text)
+                        truncated_ids = token_ids[:self.tweet_max_tokens]
+                        truncated_text = self.tokenizer.decode(truncated_ids, skip_special_tokens=True)
 
                         # 변인 통제를 위해, sentiment_df에 있는 tweet_id만 사용
                         if self.sentiment_df[self.sentiment_df['tweet_id'] == tweet_id].empty:
@@ -168,10 +235,12 @@ class GeneratePrompts():
 
                         tweets_dic['basic'].append(f'- "{formatted_text}"')
 
+                        # finma basic용 쿼리 추가
+                        finma_basic_tweets.append(truncated_text)
+
                         # neutral 거르기
                         if self.sentiment_df[self.sentiment_df['tweet_id'] == tweet_id].iloc[0]['sentiment'] != 'neutral':
-                            continue
-                        tweets_dic['non_neutral'].append(f'- "{formatted_text}"')
+                            tweets_dic['non_neutral'].append(f'- "{formatted_text}"')
 
                         # user 정보 불러오기
                         user_info = tweet_data.get('user', {})
@@ -182,12 +251,14 @@ class GeneratePrompts():
                             user_cred_row = high_cred_user_df.loc[uid]
 
                             tweets_dic['exclude_low'].append(f'- "{formatted_text}"')
+                            finma_cred_users.append((user_cred_row[criterion], truncated_text))
 
                             # 메타 데이터 포함
-                            tweets_dic['include_cred'].extend([
-                                f'- "{formatted_text}"',
-                                f'- user_credibility: {user_cred_row['con_acc_log1p']}'
-                            ])
+                            tweets_dic['include_cred'].append(
+                                f'- "{formatted_text}"'
+                                +'\n'+
+                                f'- user_credibility(wilson_score): {user_cred_row[criterion]:.2f}'
+                            )
 
                         if uid in high_cred_user_df_plus_half_std.index:
                             tweets_dic['exclude_low+0.5s'].append(f'- "{formatted_text}"')
@@ -199,6 +270,26 @@ class GeneratePrompts():
                         print(f"Error decoding JSON in file {file_path}, line: {line.strip()}: {e_json}")
                     except AttributeError as e_attr:  # js.get('user').get('id_str') 같은 경우 대비
                         print(f"Attribute error processing tweet in {file_path}: {e_attr}, data: {line.strip()}")
+
+                for query_type in tweets_dic:
+                    if 'finma' in query_type: continue
+
+                    if len(tweets_dic[query_type]) > max_tweets_per_day:
+                        tweets_dic[query_type] = random.sample(tweets_dic[query_type], max_tweets_per_day)
+
+                # finma_basic 생성
+                if len(finma_basic_tweets) > 3:
+                    finma_basic_text = ' |'.join(random.sample(finma_basic_tweets, 3))
+                    tweets_dic['finma_basic'] = [finma_basic_text]
+                elif finma_basic_tweets:
+                    finma_basic_text = ' |'.join(finma_basic_tweets)
+                    tweets_dic['finma_basic'] = [finma_basic_text]
+
+                # finma_exclude_low 생성
+                finma_cred_users.sort(key=lambda x: x[0], reverse=True)  # 신뢰도 높은 순으로 정렬
+                finma_exclude_low_text = ' |'.join(list(map(lambda x: x[-1], finma_cred_users[:3])))
+                if finma_exclude_low_text:
+                    tweets_dic['finma_exclude_low'].append(finma_exclude_low_text)
 
         except FileNotFoundError:  # 이중 확인 (Path.exists() 이후에도 발생 가능성 있음, race condition 등)
             print(f"File not found (double check): {file_path}")
@@ -267,7 +358,7 @@ class GeneratePrompts():
         # --- 쿼리 문자열 생성 단계 ---
 
         # 'default'면 prefix를 그대로 사용
-        new_prefix = self.make_prefix(prefix, 'basic')
+        new_prefix = self.make_prefix(prefix, 'basic') #SOTA는 with_column_info로 설정
 
         query_list_dic = {}
         for query in self.query_types:
@@ -287,8 +378,14 @@ class GeneratePrompts():
             for query in preprocessed_tweets_for_date:
                 tweets = preprocessed_tweets_for_date[query]
                 if tweets:  # 트윗이 있는 경우에만 헤더와 함께 추가
-                    query_list_dic[query].append(current_date_header)
-                    query_list_dic[query].extend(tweets)
+                    if 'finma' in query:
+                        if len(tweets) > 1:
+                            print('ERROR'*30)
+                            raise
+                        query_list_dic[query].append(f"{current_date_header} {tweets[0]}")
+                    else:
+                        query_list_dic[query].append(current_date_header)
+                        query_list_dic[query].extend(tweets)
 
         # 최종 쿼리 문자열 생성
         # 각 부분을 개행 문자로 연결하고, 마지막에 Answer 접미사 추가
@@ -309,6 +406,9 @@ class GeneratePrompts():
         df['pred_correct'] = df.apply(correcting, axis=1)
 
         d = {}
+        d['success_counts'] = df['pred_correct'].sum()
+        d['pred_counts'] = len(df)
+
         d['simple_accuracy'] = len(df[df['pred_correct']]) / len(df)
         column_match = {'positive': 'High Change from Tweet (%)', 'negative': 'Low Change from Tweet (%)'}
         df['correspond_change'] = df.apply(lambda x: abs(x[column_match[x['Sentiment']]]), axis=1)
@@ -367,7 +467,7 @@ class GeneratePrompts():
             print('non_exist:', self.count_non_exist)
             print('exist:', self.count_exist)
 
-    def show_example_queries(self, example_type, number_of_examples=1):
+    def show_example_queries(self, example_type, number_of_examples=1, query_types=[]):
         """각 쿼리 타입에 대한 예시 출력"""
         if example_type == 'from-code':
             if self.dataset == 'flare-acl':
@@ -402,6 +502,8 @@ class GeneratePrompts():
             processed_queries_df.rename(columns=column_change, inplace=True)
 
         for query_type in self.query_types:
+            if query_types and query_type not in query_types:
+                continue
             print(f"\n========== Example of \"{query_type}\" query ==========")
             for idx, query in enumerate(processed_queries_df[query_type]):
                 print(f'[{idx}]')
