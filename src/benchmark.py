@@ -13,7 +13,7 @@ import numpy as np
 from sklearn.metrics import accuracy_score, f1_score, matthews_corrcoef, confusion_matrix, classification_report
 
 from .constants import (
-    DEFAULT_GPT_MODEL,
+    DEFAULT_GPT_MODEL, DEFAULT_GEMINI_MODEL,
     DEFAULT_GPT_SYSTEM_INSTRUCTION,
     FLARE_EDITED_TEST_PATH,
     BATCH_OUTPUT_DIR,
@@ -23,6 +23,7 @@ from .constants import (
 )
 from .data_loader import DataLoader
 from .openai_client import OpenAIClient
+from .gemini_client import GeminiClient
 from .utils import setup_logging
 
 logger = setup_logging(__name__)
@@ -148,6 +149,10 @@ class BenchmarkRunner:
                 model=config.get('model_path_or_name', DEFAULT_GPT_MODEL)
             )
             self.use_batch = config.get('use_batch_api', True)
+        elif model_type == "gemini":
+            # from .gemini_client import GeminiClient
+            self.model = GeminiClient(model=config.get('model_path_or_name', DEFAULT_GEMINI_MODEL))
+            self.use_batch = config.get('use_batch_api', False)
         else:
             raise ValueError(f"Unsupported model type: {model_type}")
     
@@ -225,7 +230,7 @@ class BenchmarkRunner:
         # Generate predictions
         logger.info("Generating predictions...")
         
-        if hasattr(self, 'model') and isinstance(self.model, OpenAIClient):
+        if isinstance(self.model, (OpenAIClient, GeminiClient)):
             # Create custom IDs for batch tracking
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             custom_ids = []
@@ -243,7 +248,7 @@ class BenchmarkRunner:
             )
             self.batch_id = batch_id  # Save batch ID for later use
         else:
-            raise NotImplementedError("Only GPT models are currently supported")
+            raise NotImplementedError("Unsupported model client")
         
         # Process predictions
         predicted_labels = [self.evaluator.process_single_result(text) for text in generated_texts]

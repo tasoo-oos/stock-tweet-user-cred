@@ -14,7 +14,7 @@ from .constants import (
     OUTPUT_TABLE_STOCK_PATH,
     ACL18_PRICE_DATA_DIR,
     SENTIMENT_LEVELS,
-    BUSINESS_DAYS_FORWARD
+    BUSINESS_DAYS_FORWARD, KAGGLE1_COMBINED_JSONL_PATH
 )
 from .data_loader import DataLoader
 from .utils import setup_logging, get_business_days_later, parse_custom_id
@@ -25,7 +25,13 @@ logger = setup_logging(__name__)
 class SentimentPriceExtractor:
     """Extract sentiment and merge with stock price data."""
     
-    def __init__(self):
+    def __init__(self, dataset_choice: str):
+        self.dataset_choice = dataset_choice
+        if dataset_choice == 'acl18':
+            self.combined_dataset_path = ACL18_COMBINED_JSONL_PATH
+        elif dataset_choice == 'kaggle1':
+            self.combined_dataset_path = KAGGLE1_COMBINED_JSONL_PATH
+
         self.data_loader = DataLoader()
     
     def extract_sentiment_from_response(self, response_data: Dict[str, Any]) -> Tuple[str, Dict[str, float]]:
@@ -68,6 +74,20 @@ class SentimentPriceExtractor:
                     # Highest probability sentiment
                     highest_prob_token_info = top_logprobs_list[0]
                     highest_sentiment = highest_prob_token_info.get("token", '')
+        else:
+            logger.info('Warning: logprobs가 없습니다. 호출 시 temperature를 0.0으로 설정하지 않았다면 원하는 결과가 아닐 수도 있습니다.')
+            message = choice_item.get("message", {})
+            content = message.get("content", "")
+            if content not in ['positive', 'neutral', 'negative']:
+                logger.info(f"Unexpected content!!!! {content} (NOT IN [positive, neutral, negative])")
+                print(response_data)
+            highest_sentiment = content
+
+            for sentiment in SENTIMENT_LEVELS:
+                if sentiment == content:
+                    outlook_results[sentiment] = 1.0
+                else:
+                    outlook_results[sentiment] = 0.0
         
         return highest_sentiment, outlook_results
     
@@ -145,7 +165,7 @@ class SentimentPriceExtractor:
         
         return result
     
-    def process_combined_file(self, input_path: str = None) -> pd.DataFrame:
+    def process_combined_file(self) -> pd.DataFrame:
         """
         Process the combined JSONL file and extract sentiment with stock data.
         
@@ -155,14 +175,12 @@ class SentimentPriceExtractor:
         Returns:
             DataFrame with extracted data
         """
-        if input_path is None:
-            input_path = ACL18_COMBINED_JSONL_PATH
         
         extracted_data = []
         
-        logger.info(f"Processing {input_path}")
+        logger.info(f"Processing {self.combined_dataset_path}")
         
-        with open(input_path, 'r', encoding='utf-8') as f:
+        with open(self.combined_dataset_path, 'r', encoding='utf-8') as f:
             lines = f.readlines()
         
         for line in lines:
@@ -228,9 +246,9 @@ class SentimentPriceExtractor:
         return df
 
 
-def main():
+def main(dataset_choice):
     """Main execution function."""
-    extractor = SentimentPriceExtractor()
+    extractor = SentimentPriceExtractor(dataset_choice)
     
     # Process the combined file
     df = extractor.process_combined_file()

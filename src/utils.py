@@ -9,6 +9,7 @@ from typing import Dict, Optional, Any
 
 import pandas as pd
 import numpy as np
+import re
 from rich.logging import RichHandler
 from rich.console import Console
 
@@ -139,9 +140,9 @@ def parse_custom_id(custom_id: str) -> Dict[str, Any]:
     try:
         parts = custom_id.split('-')
         result = {
-            'ticker': custom_id.split('-20')[0].split('tweet-sentiment-')[-1] if 'tweet-sentiment-' in custom_id else None,
-            'date': '201' + custom_id.split('-201')[1].split(' ')[0] if '-201' in custom_id else None,
-            'tweet_id': parts[-1] if parts else None
+            'ticker': custom_id.split('-20')[0].split('tweet-sentiment-')[-1] if 'tweet-sentiment-' in custom_id else None, #str (non-$)
+            'date': re.search(r'\d{4}-\d{2}-\d{2}', custom_id).group(), #str
+            'tweet_id': parts[-1] if parts else None #str
         }
         return result
     except Exception as e:

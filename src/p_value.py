@@ -1,9 +1,7 @@
 """
 p_value.py
 """
-
 import pandas as pd
-from pathlib import Path
 from statsmodels.stats.contingency_tables import mcnemar
 from .constants import (
     BATCH_ID_MATCH,

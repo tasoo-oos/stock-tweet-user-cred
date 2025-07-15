@@ -75,12 +75,13 @@ STOCK_TABLE_PATH = ACL18_DATASET_DIR / "StockTable"
 
 # Model configuration
 DEFAULT_GPT_MODEL = "gpt-4.1-mini-2025-04-14"
+DEFAULT_GEMINI_MODEL = "gemini-2.5-flash"
 
 from .constants_prompt import *
 SENTIMENT_ANALYSIS_SYSTEM_INSTRUCTION = SENTIMENT_ANALYSIS_SYSTEM_INSTRUCTION
 SENTIMENT_ANALYSIS_QUERY_INSTRUCTION = SENTIMENT_ANALYSIS_QUERY_INSTRUCTION
 
-DEFAULT_GPT_SYSTEM_INSTRUCTION = DEFAULT_GPT_SYSTEM_INSTRUCTION_COT_version3
+DEFAULT_GPT_SYSTEM_INSTRUCTION = DEFAULT_GPT_SYSTEM_INSTRUCTION_version1
 QUERY_INSTRUCTION = QUERY_INSTRUCTION
 
 # Prompt configuration
@@ -107,7 +108,7 @@ BATCH_ID_MATCH = {
 
     'nn_include_cred':'', # non_neutral + exclude_low + 유저 신뢰도를 프롬프트에 추가
     'include_cred':'', # exclude_low + 유저 신뢰도를 프롬프트에 추가 (neutral 포함)
-    'include_all_cred':'', # 유저 신뢰도를 프롬프트에 추가 (임계값 이하의 신뢰도를 가진 유저 포함, neutral 포함)
+    'include_all_cred':'batch_68752f0bcd84819097d4b1107e76a0e3', # 유저 신뢰도를 프롬프트에 추가 (임계값 이하의 신뢰도를 가진 유저 포함, neutral 포함)
     'include_cred_level':'batch_6874d7afa6a88190907d79bc20987299', # 유저 신뢰도를 프롬프트에 추가 (임계값 이하의 신뢰도를 가진 유저 포함, neutral 포함) + 신뢰도 레벨(high, medium, low)로 반영
 
     'exclude_low+0.5s':'', # exclude_low에서 threshold를 평균+0.5표준편차로 설정 (상위 30%만 남김)

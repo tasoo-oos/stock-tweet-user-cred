@@ -25,6 +25,7 @@ logger = setup_logging(__name__)
 def get_default_configs() -> Dict[str, Dict[str, Any]]:
     """Get default configurations for benchmark scenarios."""
     basic_gpt_model = "gpt-4.1-mini-2025-04-14"
+    basic_gemini_model = "gemini-2.5-flash"
     flare_edited_dataset_path = str(FLARE_EDITED_TEST_PATH)
     
     gpt_batch_base_config = {
@@ -40,10 +41,23 @@ def get_default_configs() -> Dict[str, Dict[str, Any]]:
         "max_tokens": 500,
         "temperature": 0.0
     }
+    gemini_batch_config = {
+        "experiment_name": "[FULL] Gemini 2.5 Flash on Stock Movement",
+        "model_type": "gemini",
+        "model_path_or_name": basic_gemini_model,
+        "system_instruction": DEFAULT_GPT_SYSTEM_INSTRUCTION,
+        "dataset_path": flare_edited_dataset_path,
+        "dataset_split": "train",
+        "use_batch_api": True,
+        "batch_check_interval": 15,
+        "max_batch_wait_time": 14400,
+        "max_tokens": 500,
+        "temperature": 0.0
+    }
     
     gpt_batch_full_config = gpt_batch_base_config.copy()
     gpt_batch_sample_config = gpt_batch_base_config.copy()
-    gpt_batch_sample_config["max_batch_wait_time"] = 14400
+    # gpt_batch_sample_config["max_batch_wait_time"] = 14400
     
     gpt_batch_flare_original_config = {
         "experiment_name": "GPT 3.5 Turbo on Stock Movement (ACL18)",
@@ -72,6 +86,7 @@ def get_default_configs() -> Dict[str, Dict[str, Any]]:
         "gpt-batch-full": gpt_batch_full_config,
         "gpt-batch-sample": gpt_batch_sample_config,
         "gpt-batch-flare-original": gpt_batch_flare_original_config,
+        "gemini-batch": gemini_batch_config,
         "finma-batch": finma_batch_config
     }
 

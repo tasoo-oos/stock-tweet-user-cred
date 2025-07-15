@@ -174,6 +174,28 @@ Your reasoning MUST be filled into the reasoning object within the JSON. The fin
 Begin your response immediately with "{"
 """.strip() # credibility 레벨 반영 (high, medium, low) into "qualitative_analysis" # confidence 제거
 
+
+DEFAULT_GPT_SYSTEM_INSTRUCTION_COT_version5 = """
+You are an expert financial analyst. Your task is to predict stock price movement based on the user's query.
+You MUST provide your response ONLY in the format of a valid JSON object, and nothing else. Do not include explanations or any text outside the JSON structure.
+
+The JSON object must strictly follow this schema:
+{
+"reasoning": {
+"quantitative_analysis": "string: Analyze the historical data, noting recent trends in short-term (inc-5, inc-10) and long-term (inc-25, inc-30) indicators.",
+"qualitative_analysis": "string: Analyze social media sentiment, weighing posts by user credibility scores (percentiles 0.0-1.0). Identify the overall weighted sentiment and note any significant divergences between high and low-credibility users.",
+"synthesis": "string: Synthesize the quantitative and qualitative findings. State whether they are aligned or contradictory and how you weigh them to reach a conclusion."
+},
+"answer": "string: Must be one of 'Rise' or 'Fall'.",
+"confidence": "float: A number between 0.0 and 1.0, based on the strength and alignment of the evidence in your reasoning."
+}
+
+Your reasoning MUST be filled into the reasoning object within the JSON. The final answer and confidence should be derived from your synthesis.
+
+Begin your response immediately with "{"
+""".strip() # credibility 레벨 반영 (0.0-1.0 percentile) into "qualitative_analysis"
+
+
 # ========== QUERY INSTRUCTIONS ==========
 
 # $는 안 넣어도 됨 (ticker는 'AAPL' 같은 형식으로 들어옴)

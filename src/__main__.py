@@ -169,14 +169,11 @@ Examples:
         help="Extract sentiment from tweets and merge with stock price data"
     )
     extract_parser.add_argument(
-        "--input", 
+        "--dataset-choice",
         type=str,
-        help="Input CSV file path (optional, uses default dataset if not provided)"
-    )
-    extract_parser.add_argument(
-        "--output",
-        type=str,
-        help="Output file path (optional, uses default naming if not provided)"
+        choices=['acl18', 'kaggle1'],
+        default='kaggle1',
+        help="Dataset choice for sentiment extraction (choices: [acl18, kaggle1])"
     )
     
     # ========== User Credibility Command ==========
@@ -204,41 +201,48 @@ Examples:
 
 
     # ========== Generate Prompts Command =========
-    prompts_parse = subparsers.add_parser(
+    prompts_parser = subparsers.add_parser(
         "generate-prompts",
         help="Generate prompts for benchmark experiments"
     )
-    prompts_parse.add_argument(
+    prompts_parser.add_argument(
         "--dataset",
         type=str,
         choices=["flare-acl", "kaggle-1"],
         default="flare-acl",
         help="Configuration"
     )
-    prompts_parse.add_argument(
+    prompts_parser.add_argument(
         "--split",
         type=str,
         choices=["all", "train", "test", "valid"],
         default="all",
         help="Configuration"
     )
-    prompts_parse.add_argument(
+    prompts_parser.add_argument(
         "--example",
         action="store_true",
         help="Generate example prompts for the dataset"
     )
-    prompts_parse.add_argument(
+    prompts_parser.add_argument(
         "--num-examples",
         type=int,
         default=1,
         help="Number of example prompts to generate (default: 1)"
     )
-    prompts_parse.add_argument(
+    prompts_parser.add_argument(
         "--example-type",
         type=str,
         choices=["from-code", "from-file"],
         default="from-code",
         help="Type of example to generate (choices: [from-code, from-file]) (default: from-code)"
+    )
+    # example 보여줄 때 query type을 지정할 수 있음
+    prompts_parser.add_argument(
+        "--query-types",
+        type=str,
+        nargs="*",
+        help="Query types for example prompts (optional, shows all if not provided) (ex- basic, exclude_low, ...)",
     )
     
     # ========== Benchmark Command =========
@@ -249,7 +253,7 @@ Examples:
     bench_parser.add_argument(
         "--scenario",
         type=str,
-        choices=["gpt-batch-full", "gpt-batch-sample", "gpt-batch-flare-original", "finma-batch"],
+        choices=["gpt-batch-full", "gpt-batch-sample", "gpt-batch-flare-original", "gemini-batch", "finma-batch"],
         help="Predefined scenario to run"
     )
     bench_parser.add_argument(
@@ -378,7 +382,7 @@ Examples:
                 logger.info("Sentiment analysis completed successfully")
 
         elif args.command == "extract-sentiment":
-            result = extract_main()
+            result = extract_main(args.dataset_choice)
             logger.info("Sentiment extraction completed successfully")
             
         elif args.command == "user-credibility":
@@ -390,7 +394,7 @@ Examples:
             logger.info(f"dataset: {args.dataset} / split: {args.split}")
             generator = GeneratePrompts(args.dataset, args.split)
             if args.example:
-                generator.show_example_queries(args.example_type, args.num_examples)
+                generator.show_example_queries(args.example_type, args.num_examples, args.query_types)
             else:
                 generator.process_and_save()
             logger.info("Completed successfully")

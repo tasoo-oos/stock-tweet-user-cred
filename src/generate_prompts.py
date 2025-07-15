@@ -416,7 +416,7 @@ class GeneratePrompts():
         # --- 쿼리 문자열 생성 단계 ---
 
         # 'default'면 prefix를 그대로 사용
-        new_prefix = self.make_prefix(prefix, 'with_column_info') #SOTA는 with_column_info로 설정
+        new_prefix = self.make_prefix(prefix, 'basic') #SOTA는 with_column_info로 설정
 
         query_list_dic = {}
         for query in self.query_types:
